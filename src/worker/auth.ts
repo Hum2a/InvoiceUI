@@ -4,7 +4,7 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { drizzle } from 'drizzle-orm/neon-http'
 import { Resend } from 'resend'
 import * as schema from './auth-schema'
-import { renderMagicLinkEmailHtml, renderMagicLinkEmailText } from '../shared/emailTemplate'
+import { renderMagicLinkEmailHtml, renderMagicLinkEmailText, formatSenderFrom, getDeliverabilityHeaders } from '../shared/emailTemplate'
 
 export const DEV_ORIGINS = [
   'http://localhost:5173',
@@ -43,12 +43,16 @@ export function auth(env: Env, requestOrigin?: string) {
           if (isDev) {
             console.log(`[InvoiceUI Dev] Magic link for ${email}: ${url}`)
           }
+          const senderFrom = formatSenderFrom('InvoiceUI Security', env.EMAIL_FROM)
+          const headers = getDeliverabilityHeaders({ kind: 'magic-link' })
           const { error } = await new Resend(env.RESEND_API_KEY).emails.send({
-            from: env.EMAIL_FROM,
+            from: senderFrom,
             to: email,
+            replyTo: env.OWNER_EMAIL,
             subject: 'Sign in to InvoiceUI',
             html: renderMagicLinkEmailHtml({ email, url, expiresInMinutes: 10 }),
             text: renderMagicLinkEmailText({ email, url, expiresInMinutes: 10 }),
+            headers,
           })
           if (error) throw new Error('Sign-in email could not be sent')
         },

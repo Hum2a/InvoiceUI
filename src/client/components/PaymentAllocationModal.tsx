@@ -9,7 +9,7 @@ import {
   type Workspace,
   type Business,
 } from '../../shared/domain'
-import { Modal, Button } from './ui'
+import { Modal, Button, StateButton } from './ui'
 
 export function PaymentAllocationModal({
   open,
@@ -324,9 +324,15 @@ export function PaymentAllocationModal({
           <Button onClick={onClose} disabled={busy}>
             Cancel
           </Button>
-          <Button variant="primary" onClick={() => void handleSubmit()} disabled={!canSubmit}>
-            {busy ? 'Saving payment…' : 'Record Payment & Allocations ↗'}
-          </Button>
+          <StateButton
+            variant="primary"
+            onClick={() => void handleSubmit()}
+            disabled={!canSubmit}
+            saving={busy}
+            idleText="Record Payment & Allocations ↗"
+            savingText="Saving payment..."
+            savedText="Payment recorded!"
+          />
         </div>
       </div>
     </Modal>

@@ -973,3 +973,44 @@ function CopyComponent({ size = 16, ...props }: IconProps<keyof typeof copyAnima
 export function Copy(props: IconProps<keyof typeof copyAnimations>) {
   return <IconWrapper icon={CopyComponent} {...props} />
 }
+
+// 16. Mail
+const mailAnimations = {
+  default: {
+    group: {
+      initial: { y: 0 },
+      animate: {
+        y: [0, -2, 0],
+        transition: { duration: 0.3, ease: 'easeInOut' },
+      },
+    },
+  } satisfies Record<string, Variants>,
+} as const
+
+function MailComponent({ size = 16, ...props }: IconProps<keyof typeof mailAnimations>) {
+  const { controls } = useAnimateIconContext()
+  const variants = getVariants(mailAnimations)
+  return (
+    <motion.svg
+      xmlns="http://www.w3.org/2000/svg"
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
+      <motion.g variants={variants.group} initial="initial" animate={controls}>
+        <rect width="20" height="16" x="2" y="4" rx="2" />
+        <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+      </motion.g>
+    </motion.svg>
+  )
+}
+export function Mail(props: IconProps<keyof typeof mailAnimations>) {
+  return <IconWrapper icon={MailComponent} {...props} />
+}
+

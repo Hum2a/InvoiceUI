@@ -11,3 +11,4 @@ export function Modal({open,onClose,title,description,children}:{open:boolean;on
 export function Badge({children,className}: {children:ReactNode;className?:string}){return <span className={cn('badge',String(children).replaceAll(' ','-'),className)}>{children}</span>}
 export function Empty({title,detail,action}:{title:string;detail:string;action?:ReactNode}){return <div className="empty"><div className="empty-icon">▤</div><h2>{title}</h2><p className="muted">{detail}</p>{action}</div>}
 export { ConfirmModal, ConfirmProvider, useConfirm, type ConfirmOptions, type AlertOptions } from './ConfirmModal'
+export { StateButton, type StateButtonProps, type ButtonStatus } from './ui/StateButton'

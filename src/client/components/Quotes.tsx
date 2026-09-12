@@ -19,7 +19,7 @@ import {
   type Line,
   type Business,
 } from '../../shared/domain'
-import { Button, Field, Modal, Badge, Empty, useConfirm } from './ui'
+import { Button, StateButton, Field, Modal, Badge, Empty, useConfirm } from './ui'
 import { NumberTicker } from './ui/NumberTicker'
 import { ShinyText } from './ui/ShinyText'
 import { downloadBlob } from '../workspace'
@@ -275,6 +275,8 @@ export function Quotes({
         })
         setNotice('New quote draft created.')
       }
+      setLoadingAction('saved')
+      await new Promise(r => setTimeout(r, 600))
       setComposerOpen(false)
       setEditingQuote(null)
     } catch (err) {
@@ -1187,17 +1189,14 @@ export function Quotes({
                 >
                   Cancel
                 </Button>
-                <Button
+                <StateButton
                   variant="primary"
                   onClick={() => void handleSaveQuote()}
-                  disabled={loadingAction === 'save'}
-                >
-                  {loadingAction === 'save'
-                    ? 'Saving...'
-                    : editingQuote
-                      ? 'Save changes'
-                      : 'Create quote draft'}
-                </Button>
+                  status={loadingAction === 'save' ? 'saving' : loadingAction === 'saved' ? 'saved' : undefined}
+                  idleText={editingQuote ? 'Save changes' : 'Create quote draft'}
+                  savingText="Saving quote..."
+                  savedText={editingQuote ? 'Changes saved!' : 'Quote created!'}
+                />
               </div>
             </div>
           </div>

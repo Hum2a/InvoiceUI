@@ -7,7 +7,7 @@ import {
   type Command,
   type Envelope,
 } from '../../shared/domain'
-import { Modal, Button, Badge, useConfirm } from './ui'
+import { Modal, Button, StateButton, Badge, useConfirm } from './ui'
 
 export function ClientPortalModal({
   workspace: w,
@@ -337,9 +337,14 @@ export function ClientPortalModal({
           <Button variant="ghost" onClick={onClose}>
             Close
           </Button>
-          <Button variant="primary" onClick={handleShare} disabled={busy}>
-            {busy ? 'Saving...' : isPortalActive ? 'Update Portal Settings' : 'Generate Portal Link'}
-          </Button>
+          <StateButton
+            variant="primary"
+            onClick={handleShare}
+            saving={busy}
+            idleText={isPortalActive ? 'Update Portal Settings' : 'Generate Portal Link'}
+            savingText="Saving settings..."
+            savedText="Portal updated!"
+          />
         </div>
       </div>
     </Modal>

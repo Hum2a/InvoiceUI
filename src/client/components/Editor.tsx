@@ -20,8 +20,8 @@ import {
   type Starter,
   type Attachment,
 } from '../../shared/domain'
-import { Button, Field, Badge, Modal, useConfirm } from './ui'
-import { Copy, Download, Send, ArrowRight, Trash2 } from './ui/AnimatedIcon'
+import { Button, StateButton, Field, Badge, Modal, useConfirm } from './ui'
+import { Copy, Download, Send, ArrowRight, Trash2, Sparkles } from './ui/AnimatedIcon'
 import { InvoicePreview } from './InvoicePreview'
 import { ReviewIssueModal } from './ReviewIssueModal'
 import { CorrectionModal } from './CorrectionModal'
@@ -73,7 +73,12 @@ export function Editor({
 
   const serial = JSON.stringify(draft)
   const dirty = serial !== saved
-  const editable = invoice.lifecycle === 'draft'
+  const [editingIssued, setEditingIssued] = useState(false)
+  const sentMessages = (workspace.messages || []).filter(
+    m => m.invoiceId === invoice.id && ['sent', 'delivered'].includes(m.status)
+  )
+  const hasBeenSent = sentMessages.length > 0
+  const editable = invoice.lifecycle === 'draft' || editingIssued
   const pending = useRef<Promise<Envelope> | null>(null)
   const latest = useRef(serial)
   latest.current = serial
@@ -199,7 +204,12 @@ export function Editor({
     if (target === saved) return
     setSaving(true)
     setError('')
-    const p = onCommand({ type: 'draft', value: JSON.parse(target) })
+    const val = JSON.parse(target)
+    const cmd: Command =
+      invoice.lifecycle === 'draft'
+        ? { type: 'draft', value: val }
+        : { type: 'updateIssuedInvoice', id: invoice.id, value: val }
+    const p = onCommand(cmd)
     pending.current = p
     try {
       await p
@@ -587,11 +597,68 @@ export function Editor({
           )}
         </div>
       )}
+      {editingIssued && (
+        <div className="p-3.5 mb-4 rounded-xl bg-blue-500/10 border border-blue-500/30 text-xs text-blue-900 dark:text-blue-300 flex items-center justify-between flex-wrap gap-2">
+          <div className="space-y-0.5">
+            <p className="font-semibold flex items-center gap-1.5">
+              <span>✏️</span> Editing issued invoice {invoice.number}
+            </p>
+            <p className="text-[11px] text-blue-800 dark:text-blue-400">
+              You can modify line items, client address, notes, payment terms, or discounts. Saved edits will immediately update the live preview, PDF, and delivery email for resending.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              className="text-xs h-7 py-0 px-2.5"
+              onClick={() => {
+                setDraft(invoice)
+                setSaved(JSON.stringify(invoice))
+                setEditingIssued(false)
+                setError('')
+              }}
+            >
+              Cancel editing
+            </Button>
+            <StateButton
+              variant="secondary"
+              className="text-xs h-7 py-0 px-3"
+              disabled={!dirty}
+              saving={saving}
+              onClick={() => save()}
+              idleText="Save changes"
+              savingText="Saving..."
+              savedText="Saved!"
+            />
+            <StateButton
+              variant="primary"
+              className="text-xs h-7 py-0 px-3"
+              disabled={saving}
+              onClick={async () => {
+                try {
+                  if (dirty) await save()
+                  setEditingIssued(false)
+                  onAction('email', draft)
+                } catch {}
+              }}
+              idleIcon={<Send size={12} animateOnHover className="mr-1 inline" />}
+              idleText="Save & resend"
+              savingText="Saving..."
+              savedText="Saved!"
+            />
+          </div>
+        </div>
+      )}
       <div className="page-heading">
         <div>
-          <div className="flex gap-2 items-center">
+          <div className="flex gap-2 items-center flex-wrap">
             <p className="eyebrow">{invoice.number || 'New invoice'}</p>
             <Badge>{invoice.lifecycle}</Badge>
+            {hasBeenSent && (
+              <Badge className="bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/30">
+                Sent {sentMessages.length > 1 ? `(${sentMessages.length}x)` : ''}
+              </Badge>
+            )}
             {appliedCreditNotes.length > 0 && (
               <Badge className="bg-amber-500/10 text-amber-700 dark:text-amber-300">
                 Credited ({money(t.credited, invoice.currency)})
@@ -600,8 +667,10 @@ export function Editor({
           </div>
           <h1>{invoice.lifecycle === 'draft' ? 'Make the boring bit beautiful.' : invoice.client.name}</h1>
           <p className="muted" role="status">
-            {!editable
-              ? 'Issued details are preserved.'
+            {invoice.lifecycle === 'issued' && !editingIssued
+              ? hasBeenSent
+                ? `Issued and sent (${sentMessages[0]?.created ? new Date(sentMessages[0].created).toLocaleDateString() : 'sent'}). Click "Edit invoice to resend" to update details.`
+                : 'Issued details are preserved. Click "Edit invoice" to make updates.'
               : error
                 ? 'Changes need attention'
                 : saving
@@ -625,7 +694,7 @@ export function Editor({
             <Download size={13} animateOnHover className="mr-1 inline" />
             Download PDF
           </Button>
-          {editable ? (
+          {invoice.lifecycle === 'draft' ? (
             <>
               <Button
                 variant="danger"
@@ -657,13 +726,59 @@ export function Editor({
           ) : (
             invoice.lifecycle === 'issued' && (
               <>
-                <Button onClick={() => setCorrectionOpen(true)}>
-                  Correct invoice / Credit
-                </Button>
-                <Button variant="primary" onClick={() => action('email')}>
-                  <Send size={13} animateOnHover className="mr-1 inline" />
-                  Email invoice
-                </Button>
+                {editingIssued ? (
+                  <>
+                    <Button
+                      variant="ghost"
+                      onClick={() => {
+                        setDraft(invoice)
+                        setSaved(JSON.stringify(invoice))
+                        setEditingIssued(false)
+                        setError('')
+                      }}
+                    >
+                      Cancel editing
+                    </Button>
+                    <StateButton
+                      variant="secondary"
+                      disabled={!dirty}
+                      saving={saving}
+                      onClick={() => save()}
+                      idleText="Save changes"
+                      savingText="Saving..."
+                      savedText="Saved!"
+                    />
+                    <StateButton
+                      variant="primary"
+                      disabled={saving}
+                      onClick={async () => {
+                        try {
+                          if (dirty) await save()
+                          setEditingIssued(false)
+                          onAction('email', draft)
+                        } catch {}
+                      }}
+                      idleIcon={<Send size={13} animateOnHover className="mr-1 inline" />}
+                      idleText="Save & resend"
+                      savingText="Saving..."
+                      savedText="Saved!"
+                    />
+                  </>
+                ) : (
+                  <>
+                    <Button onClick={() => setEditingIssued(true)}>
+                      <Sparkles size={13} animateOnHover className="mr-1 inline" />
+                      {hasBeenSent ? 'Edit invoice to resend' : 'Edit invoice'}
+                    </Button>
+                    <Button onClick={() => setCorrectionOpen(true)}>
+                      Correct invoice / Credit
+                    </Button>
+                    <Button variant="primary" onClick={() => action('email')}>
+                      <Send size={13} animateOnHover className="mr-1 inline" />
+                      {hasBeenSent ? 'Resend invoice' : 'Email invoice'}
+                    </Button>
+                  </>
+                )}
               </>
             )
           )}
@@ -675,19 +790,22 @@ export function Editor({
           {error}
           <div className="actions mt-3">
             <Button onClick={() => void save().catch(() => {})}>Retry save</Button>
-            <Button
-              onClick={() => {
+            <StateButton
+              variant="secondary"
+              onClick={async () => {
                 const copy = { ...draft, id: crypto.randomUUID() }
-                void onCommand({ type: 'draft', value: draftSchema.parse(copy) })
-                  .then(() => {
-                    localStorage.removeItem(recoveryKey)
-                    setError('Recovered as a separate draft. Open it from Invoices.')
-                  })
-                  .catch(e => setError(e.message))
+                try {
+                  await onCommand({ type: 'draft', value: draftSchema.parse(copy) })
+                  localStorage.removeItem(recoveryKey)
+                  setError('Recovered as a separate draft. Open it from Invoices.')
+                } catch (e) {
+                  setError(e instanceof Error ? e.message : 'Recovery failed')
+                }
               }}
-            >
-              Save as another draft
-            </Button>
+              idleText="Save as another draft"
+              savingText="Saving..."
+              savedText="Draft saved!"
+            />
           </div>
         </div>
       )}
@@ -713,9 +831,16 @@ export function Editor({
               <div className="section-heading">
                 <h2>Invoice details</h2>
                 {editable && (
-                  <Button variant="ghost" onClick={() => void save().catch(() => {})} disabled={!dirty || saving}>
-                    Save
-                  </Button>
+                  <StateButton
+                    variant="ghost"
+                    className="text-xs h-7 py-0 px-2.5"
+                    disabled={!dirty}
+                    saving={saving}
+                    onClick={() => save().catch(() => {})}
+                    idleText="Save"
+                    savingText="Saving..."
+                    savedText="Saved!"
+                  />
                 )}
               </div>
               <div className="form-grid">
@@ -1221,15 +1346,17 @@ export function Editor({
                       onChange={e => setIssuedInternalNotes(e.target.value)}
                     />
                     <div className="flex items-center justify-between">
-                      <Button
+                      <StateButton
                         type="button"
                         variant="ghost"
                         className="text-xs"
-                        disabled={savingInternalNotes || issuedInternalNotes === (invoice.internalNotes || '')}
-                        onClick={() => void handleSaveIssuedNotes()}
-                      >
-                        {savingInternalNotes ? 'Saving…' : 'Save private note'}
-                      </Button>
+                        disabled={issuedInternalNotes === (invoice.internalNotes || '')}
+                        saving={savingInternalNotes}
+                        onClick={() => handleSaveIssuedNotes()}
+                        idleText="Save private note"
+                        savingText="Saving..."
+                        savedText="Note saved!"
+                      />
                       {internalNotesNotice && (
                         <span className="text-xs text-lime-600 dark:text-lime-400 font-medium">
                           {internalNotesNotice}
@@ -1333,9 +1460,15 @@ export function Editor({
             </div>
             <div className="actions">
               {editable && (
-                <Button variant="ghost" onClick={() => void save().catch(() => {})} disabled={!dirty || saving}>
-                  {saving ? 'Saving…' : dirty ? 'Save draft' : 'Saved'}
-                </Button>
+                <StateButton
+                  variant="ghost"
+                  onClick={() => save().catch(() => {})}
+                  disabled={!dirty && !saving}
+                  status={saving ? 'saving' : !dirty ? 'saved' : 'idle'}
+                  idleText="Save draft"
+                  savingText="Saving..."
+                  savedText="Saved"
+                />
               )}
               {editable && (
                 <Button variant="primary" onClick={() => void issue()} disabled={saving}>

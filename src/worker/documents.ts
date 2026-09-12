@@ -2,7 +2,7 @@ import { renderPDF, renderStatementPDF } from '../shared/pdf'
 import type { Invoice, Workspace, ClientStatement } from '../shared/domain'
 
 export async function document(env:Env,owner:string,w:Workspace,i:Invoice,breakdown=false){
-  const key=`${owner}/${i.id}/${i.issuedAt||'draft'}-${i.lifecycle}-${breakdown?'breakdown':'invoice'}.pdf`;
+  const key=`${owner}/${i.id}/${i.issuedAt||'draft'}-${i.updated||'init'}-${i.lifecycle}-${breakdown?'breakdown':'invoice'}.pdf`;
   if(i.issuedAt&&env.DOCUMENTS){
     const existing=await env.DOCUMENTS.get(key);
     if(existing)return new Uint8Array(await existing.arrayBuffer());

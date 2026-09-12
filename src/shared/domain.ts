@@ -366,6 +366,7 @@ export const commandSchema=z.discriminatedUnion('type',[
   z.object({type:z.literal('deleteDraft'),id}),
   z.object({type:z.literal('deleteClient'),id}),z.object({type:z.literal('deleteProject'),id}),z.object({type:z.literal('deleteService'),id}),z.object({type:z.literal('deleteStarter'),id}),
   z.object({type:z.literal('dismissOnboarding'),dismissed:z.boolean()}),
+  z.object({type:z.literal('updateIssuedInvoice'),id,value:draftSchema}),
   z.object({type:z.literal('issue'),id}),z.object({type:z.literal('duplicate'),id,newId:id}),z.object({type:z.literal('archive'),id,value:z.boolean()}),z.object({type:z.literal('void'),id,reason:z.string().min(1).max(1000)}),z.object({type:z.literal('payment'),id,value:paymentSchema}),z.object({type:z.literal('reverse'),id,paymentId:id}),
   z.object({type:z.literal('creditNote'),invoiceId:id,reason:z.string().min(1).max(1000),lines:z.array(lineSchema).min(1).max(100),tax:amount.refine(v=>new Decimal(v).lte(100)),replacement:z.boolean().default(false)}),
   z.object({type:z.literal('clientPayment'),value:z.object({id,clientId:id,currency:businessSchema.shape.currency,amount,date,method:text,reference:text,notes:text,allocations:z.array(z.object({invoiceId:id,amount}))})}),
@@ -455,6 +456,52 @@ export function applyCommand(source:Workspace,raw:Command,now=new Date()):Worksp
   case 'deleteStarter':w.starters=w.starters.filter(x=>x.id!==c.id);break;
   case 'dismissOnboarding':w.business.onboardingDismissed=c.dismissed;break;
   case 'draft':{const old=w.invoices.find(i=>i.id===c.value.id);if(old&&old.lifecycle!=='draft')throw new Error('Issued invoices cannot be edited. Duplicate or void it.');if(c.value.clientId&&!w.clients.some(x=>x.id===c.value.clientId))throw new Error('Client not found');if(c.value.projectId&&!w.projects.some(x=>x.id===c.value.projectId))throw new Error('Project not found');upsert(w.invoices,{...(old??newInvoice(w)),...c.value,updated:stamp});break}
+  case 'updateIssuedInvoice':{
+    const inv=find(c.id);
+    if(inv.lifecycle!=='issued')throw new Error('Only issued invoices can be updated');
+    if(c.value.clientId&&!w.clients.some(x=>x.id===c.value.clientId))throw new Error('Client not found');
+    if(c.value.projectId&&!w.projects.some(x=>x.id===c.value.projectId))throw new Error('Project not found');
+    if(c.value.currency!==inv.currency&&((inv.payments||[]).some(p=>!p.reversed)||(inv.creditNoteIds||[]).length>0)){
+      throw new Error('Cannot change currency of an invoice with recorded payments or credit notes');
+    }
+    const currentTotals=totals(inv,w.creditNotes);
+    const paidAmount=new Decimal(currentTotals.paid);
+    const creditedAmount=new Decimal(currentTotals.credited);
+    const newTotals=totals(c.value,w.creditNotes);
+    if(new Decimal(newTotals.total).lt(paidAmount)){
+      throw new Error(`Updated invoice total (${newTotals.total}) cannot be less than already recorded payments (${paidAmount.toFixed(precision(inv.currency))})`);
+    }
+    if(new Decimal(newTotals.total).lt(creditedAmount)){
+      throw new Error(`Updated invoice total (${newTotals.total}) cannot be less than applied credit notes (${creditedAmount.toFixed(precision(inv.currency))})`);
+    }
+    const errors=issueErrors({...inv,...c.value},inv.business??w.business);
+    if(errors.length)throw new Error(errors.join(' '));
+
+    inv.clientId=c.value.clientId;
+    inv.projectId=c.value.projectId;
+    inv.client=structuredClone(c.value.client);
+    inv.issueDate=c.value.issueDate;
+    inv.dueDate=c.value.dueDate;
+    inv.terms=c.value.terms;
+    inv.manualDue=c.value.manualDue;
+    inv.currency=c.value.currency;
+    inv.lines=structuredClone(c.value.lines);
+    inv.tax=c.value.tax;
+    inv.discount=c.value.discount;
+    inv.discountType=c.value.discountType;
+    inv.deposit=c.value.deposit;
+    inv.notes=c.value.notes;
+    if(c.value.internalNotes!==undefined)inv.internalNotes=c.value.internalNotes;
+    if(c.value.attachments!==undefined)inv.attachments=structuredClone(c.value.attachments);
+    inv.po=c.value.po;
+    inv.reference=c.value.reference;
+    inv.breakdown=c.value.breakdown;
+    inv.instalments=structuredClone(c.value.instalments);
+    inv.template=c.value.template;
+    inv.accent=c.value.accent;
+    inv.updated=stamp;
+    break;
+  }
   case 'issue':{const i=find(c.id);if(i.lifecycle!=='draft')throw new Error('Only drafts can be issued');const errors=issueErrors(i,w.business);if(errors.length)throw new Error(errors.join(' '));const series=w.business.prefix+'-'+i.issueDate.slice(0,4);const number=(w.sequence[series]??0)+1;w.sequence[series]=number;i.number=series+'-'+String(number).padStart(4,'0');i.lifecycle='issued';i.issuedAt=stamp;i.business=structuredClone(w.business);const reservedWorkIds=new Set([...(i.reservedWorkEntryIds||[]),...(w.workEntries||[]).filter(e=>e.reservedDraftId===i.id).map(e=>e.id)]);for(const e of (w.workEntries||[])){if(reservedWorkIds.has(e.id)){e.status='billed';e.billedInvoiceId=i.id;e.billedAt=stamp;e.reservedDraftId=undefined;e.updated=stamp}}for(const p of w.projects){for(const m of p.milestones||[]){if(m.reservedDraftId===i.id||(i.reservedMilestoneId&&m.id===i.reservedMilestoneId)){m.status='billed';m.billedInvoiceId=i.id;m.billedAt=stamp;m.reservedDraftId=undefined;m.updated=stamp}}}i.updated=stamp;break}
   case 'duplicate':{const old=find(c.id);if(w.invoices.some(x=>x.id===c.newId))throw new Error('Duplicate already exists');const fresh=newInvoice(w);const issueDate=fresh.issueDate;const dueDate=addDays(issueDate,old.terms);w.invoices.unshift({...fresh,id:c.newId,number:'',lifecycle:'draft',archived:false,business:null,clientId:old.clientId,projectId:old.projectId,client:structuredClone(old.client),issueDate,dueDate,terms:old.terms,manualDue:old.manualDue,currency:old.currency,lines:structuredClone(old.lines),tax:old.tax,discount:old.discount,discountType:old.discountType,deposit:old.deposit,instalments:structuredClone(old.instalments),notes:old.notes,internalNotes:old.internalNotes,attachments:structuredClone(old.attachments),po:old.po,reference:old.reference,breakdown:old.breakdown,template:old.template,accent:old.accent,payments:[],creditNoteIds:[],share:undefined,issuedAt:undefined,voidReason:undefined,created:stamp,updated:stamp,reminder:{enabled:false,days:7,lastDate:''}});break}
   case 'archive':find(c.id).archived=c.value;break;
@@ -1107,7 +1154,8 @@ export function applyCommand(source:Workspace,raw:Command,now=new Date()):Worksp
       activeProf.updated=stamp;
     }
   }
-  w.audit.unshift({id:crypto.randomUUID(),at:stamp,action:c.type,invoiceId:'id' in c?c.id:undefined});return w
+  const commandInvoiceId = 'id' in c ? c.id : ('invoiceId' in c ? (c as { invoiceId?: string }).invoiceId : ('value' in c && c.value && typeof c.value === 'object' && 'id' in c.value ? (c.value as { id?: string }).id : undefined));
+  w.audit.unshift({id:crypto.randomUUID(),at:stamp,action:c.type,invoiceId:commandInvoiceId});return w
 }
 export function reminderMessage(i:Invoice,b:Business):Message{return {id:crypto.randomUUID(),invoiceId:i.id,kind:'reminder',to:i.client.email,cc:i.client.cc,replyTo:i.client.replyTo||b.email,subject:`Payment reminder: ${i.number}`,body:`Hello ${i.client.name},\n\nA quick reminder that ${money(totals(i).balance,i.currency)} remains outstanding for ${i.number}, due on ${i.dueDate}. Please let me know if you need anything from me.\n\nThank you,\n${b.name}`,status:'draft',created:new Date().toISOString()}}
 export function runSchedules(source:Workspace,now=new Date()):Workspace{const w=structuredClone(source);w.starters = w.starters || [];w.creditNotes = w.creditNotes || [];w.payments = w.payments || [];w.receipts = w.receipts || [];const day=today(w.business.timezone,now);for(const s of w.schedules){if(s.paused||s.nextDate>day)continue;const original=w.invoices.find(i=>i.id===s.invoiceId);if(!original||original.lifecycle==='void'){s.paused=true;continue}if(s.lastRunDate===s.nextDate)continue;const fresh=newInvoice(w);w.invoices.unshift({...original,...fresh,client:structuredClone(original.client),clientId:original.clientId,projectId:original.projectId,lines:structuredClone(original.lines),currency:original.currency,tax:original.tax,notes:original.notes,internalNotes:original.internalNotes,attachments:structuredClone(original.attachments),breakdown:original.breakdown,discount:original.discount,discountType:original.discountType,issueDate:s.nextDate,dueDate:addDays(s.nextDate,original.terms),share:undefined,issuedAt:undefined,voidReason:undefined});s.lastRunDate=s.nextDate;s.nextDate=nextMonth(s.nextDate,s.months,s.day)}for(const i of w.invoices){if(!w.business.autoReminders||!i.reminder.enabled||status(i,day,w.creditNotes)!=='overdue'||!i.client.email)continue;if(i.reminder.pausedUntil&&i.reminder.pausedUntil>day)continue;const t=totals(i,w.creditNotes);if(new Decimal(t.balance).lte(0)||i.lifecycle!=='issued')continue;if(w.messages.some(m=>m.invoiceId===i.id&&m.status==='bounced'))continue;const last=i.reminder.lastDate||i.dueDate;if(addDays(last,i.reminder.days)>day)continue;if(w.messages.some(m=>m.invoiceId===i.id&&m.kind==='reminder'&&['draft','queued','sending'].includes(m.status)))continue;const m=reminderMessage(i,i.business??w.business);m.status='queued';w.messages.unshift(m);i.reminder.lastDate=day}return w}

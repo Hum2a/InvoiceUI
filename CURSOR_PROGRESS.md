@@ -813,6 +813,117 @@ Update client directory records and invoice forms to support enriched billing fi
    - TypeScript verification: 0 errors (`npm run check`).
    - Punctuation compliance: 0 em dashes (`\u2014`) and 0 en dashes (`\u2013`).
 
+## Wave K: Anti-Spam Compliance & Email Deliverability Engine
 
+1. **Standards-Compliant Anti-Spam Headers (`src/shared/emailTemplate.ts`)**:
+   - Created `getDeliverabilityHeaders(options)` utility providing automated headers for all email dispatches.
+   - `List-Unsubscribe` & `List-Unsubscribe-Post`: RFC 8058 compliant headers enabling one-click unsubscribe via mailto and https endpoints (`mailto:support@...`, `List-Unsubscribe=One-Click`).
+   - Loop Suppression & Automated Mail Identification: configured `X-Auto-Response-Suppress: OOF, AutoReply` and `Auto-Submitted: auto-generated` across all transactional alerts.
+   - Feedback Loop & Category Scoping: added `X-Entity-Ref-ID` and category tagging (`invoices`, `reminders`, `quotes`, `auth`).
+   - Display Name Formatting: enforced friendly display name formatting (`"Business Name" <invoices@domain.com>`) avoiding raw address delivery triggers.
+2. **Spam-Resistant HTML & Plaintext Templates (`src/shared/emailTemplate.ts`)**:
+   - Hidden preheader text with whitespace padding to control mobile notification snippets and prevent layout overflow into inbox summaries.
+   - Mandatory CAN-SPAM / GDPR physical address footer and opt-out instructions rendered in every email.
+   - High text-to-image ratio and inline CSS table formatting for cross-client inbox rendering without triggering Bayesian spam filters.
+   - Dual multipart MIME fallback: matching plaintext alternatives generated for all invoice, reminder, quote, and magic link emails.
+3. **Documentation & Reference Guide (`docs/EMAIL_DELIVERABILITY.md`)**:
+   - Authored comprehensive deliverability guide covering DKIM, SPF, DMARC, DNS setup, header specifications, and spam penalty avoidance.
+4. **Verification & Unit Tests (`tests/email-templates.test.ts`)**:
+   - Added automated test suite validating RFC 8058 headers, loop suppression, physical address inclusion, unsubscribe links, and plain text fallbacks.
 
+## Wave L: Sent Emails Outbox & Delivery History Dashboard
 
+1. **Outbox Dashboard Component (`src/client/components/Emails.tsx`)**:
+   - Built comprehensive workspace Outbox / Sent Emails dashboard accessible from top navigation.
+   - 5 Overview Metric Cards: All Outbox messages, Delivered, Sent, Queued, and Issues (bounced/failed/uncertain).
+   - Real-time search and multi-dimensional filtering by delivery status (`all`, `sent`, `delivered`, `bounced`, `failed`, `queued`, `draft`), message kind (`invoice`, `reminder`, `quote`), and recipient client.
+   - Paginated dispatch table displaying timestamp, kind badge, subject, recipient contact, provider ID, status pill, and action buttons.
+2. **Deep Inspection Modal & Live Preview (`EmailDetailModal` in `Emails.tsx`)**:
+   - Message envelope metadata inspector: provider ID, Resend message link, recipients (`to`, `cc`, `replyTo`), sent timestamps.
+   - Live sandboxed HTML preview with Desktop (620px) vs Mobile (375px) responsive viewport toggles.
+   - Plain-text alternative fallback viewer with one-click copy.
+   - Anti-Spam Diagnostics checklist: visual verification of RFC 8058 headers, physical address footer, loop suppression, and text fallback presence.
+   - One-click safe retry action for failed or bounced dispatches (`onCommand({ type: 'send', id })`).
+3. **UI Stack & Animate UI Integration**:
+   - Added animated `Mail` icon to `src/client/components/ui/AnimatedIcon.tsx` using official Animate UI pattern.
+   - Updated `docs/UI_COMPONENT_SOURCES.md` with Mail icon provenance.
+   - Integrated "Emails" tab into `AnimatedTabs` in `App.tsx` with live issue counter badge.
+   - Added mobile navigation shortcut and URL query parameter routing (`?view=Emails`).
+   - Added `Open Sent Emails & Outbox` action to `CommandMenu.tsx`.
+4. **Verification & Test Coverage (`tests/emails-outbox.test.ts`)**:
+   - Authored unit test suite validating outbox message aggregation, delivery status categorization, query filtering, safe retry dispatch, and Rule 12 dash compliance.
+   - Full test suite: **22 test files, 181/181 tests passing**.
+   - Typecheck: 0 errors (`npm run check`).
+   - Agent sync check: clean (`npm run sync:agents:check`).
+
+## Wave M: Resend Invoices & Edit Issued Invoices for Resending
+
+1. **Domain Command `updateIssuedInvoice` (`src/shared/domain.ts`)**:
+   - Added schema validation and domain handler for editing issued invoices safely.
+   - Preserves invoice sequence numbering (`INV-YYYY-XXXX`), issued timestamp (`issuedAt`), lifecycle (`issued`), existing payments, and applied credit notes.
+   - Validates client and project references; rejects unissued drafts.
+   - Guardrails against invalid state changes: prevents altering currency if payments or credit notes exist, and rejects reducing total below already recorded payments or credited amounts.
+   - Automatically updates `inv.updated` timestamp and logs audit entry.
+2. **Editor & Composer Workflow (`src/client/components/Editor.tsx`)**:
+   - Added explicit editing mode for issued invoices (`editingIssued` state).
+   - Dynamic top editing banner with "Cancel editing", "Save changes", and "Save & resend" quick actions.
+   - Status badge displays "Sent" indicator when an invoice has previous successful deliveries.
+   - Toolbar presents "Edit invoice to resend" and "Resend invoice" buttons for issued invoices with previous delivery records.
+3. **Resend Context in Invoice Actions Modal (`src/client/components/InvoiceActions.tsx`)**:
+   - Detects previous delivery history; updates dialog title to "Resend invoice" and action button to "Resend email".
+   - Displays context banner showing when the invoice was last delivered and to whom.
+   - Added "Resend to this address" quick action button in the Delivery history section to prefill recipient directly.
+4. **Table Quick Resend Action (`src/client/App.tsx`)**:
+   - Added quick email / resend button in the Invoices dashboard table for issued invoices.
+5. **PDF Cache & R2 Synchronization (`src/worker/documents.ts`)**:
+   - Automatically invalidates and overwrites cached PDFs upon invoice updates so newly resent documents reflect changes immediately.
+6. **Automated Test Coverage (`tests/resend-and-edit-issued.test.ts`)**:
+   - Added dedicated suite covering: editing issued invoice fields, sequence number and payment preservation, rejection on drafts, payment threshold guardrails, currency immutability with payments, and end-to-end resending workflow with delivery history tracking.
+   - Full suite passes: **22 test files, 181/181 tests passing**.
+   - Type check passes: **0 errors (`npm run check`)**.
+
+## Wave N: Developer Tools & Outbound Email Diagnostics
+
+1. **Email Deliverability Diagnostics Modal (`src/client/components/EmailDiagnosticsModal.tsx`)**:
+   - Built interactive modal for testing email dispatches across 4 scenarios: Smoke Test (Ping), Sample Invoice Notification, Overdue Payment Reminder, and Authentication Magic Link.
+   - Live HTML iframe preview with Desktop (620px) vs Mobile (375px) responsive viewport toggles and copy HTML action.
+   - Recipient configuration with quick "Use owner email" reset shortcut and optional custom note for testing dynamic variable insertion.
+   - Real-time diagnostic response panel displaying Resend Message ID, round-trip API latency (in ms), deliverability headers checklist, and actionable troubleshooting guidance for DNS/domain issues.
+2. **Settings & Global Command Palette Integration (`Records.tsx`, `CommandMenu.tsx`, `App.tsx`)**:
+   - Added "Developer tools & email deliverability" section to Settings with Resend connection status, sending address badge, and diagnostics trigger.
+   - Added "Dev tools: Send test email" action to the global Command Menu (`Ctrl+K`).
+3. **Authenticated Worker Test Endpoint (`src/worker/index.ts`)**:
+   - Added `POST /api/private/dev/test-email` restricted strictly to authenticated workspace owner.
+   - Injects anti-spam headers (`Auto-Submitted: auto-generated`, `X-Auto-Response-Suppress: OOF, AutoReply`, `X-Entity-Ref-ID`).
+   - Measures round-trip latency and returns diagnostic metadata or detailed provider error explanations.
+4. **Developer CLI Testing Utility (`scripts/test-email.mjs`, `package.json`)**:
+   - Created standalone script executable via `npm run email:test` with support for `--to=`, `--scenario=`, `--dry-run`, and `--note=`.
+   - Reads `.dev.vars` or environment variables for zero-config local testing.
+5. **Verification & Test Coverage (`tests/email-devtools.test.ts`)**:
+   - Added unit test suite covering HTML/text template rendering, deliverability headers, preheaders, and Rule 12 dash compliance.
+   - Full test suite: **22 test files, 181/181 tests passing**.
+   - Typecheck: **0 errors (`npm run check`)**.
+   - Production build: **Passed (`npm run build`)**.
+
+## Interactive State-Switching Save Buttons & Rule Formalization
+
+1. **StateButton Component (`src/client/components/ui/StateButton.tsx`, `src/client/components/ui.tsx`)**:
+   - Implemented `StateButton` based on Magic UI Animated Subscribe Button pattern (`magicui.design/docs/components/animated-subscribe-button`) with Motion spring transitions and Animate UI animated icons (`RefreshCw` for spinning/saving, `Check` for saved confirmation).
+   - Supports both controlled status (`idle`, `saving`, `saved`, `error`) and self-managing async handlers with automatic transition delays.
+   - Preserves shadcn button styling variants (`primary`, `secondary`, `ghost`, `danger`) and tactile active scale feedback (`scale(0.98)`).
+2. **Site-wide Save Button Transformation**:
+   - **Invoice Editor (`Editor.tsx`)**: Upgraded draft save button, top/bottom issued save changes & resend buttons, invoice details save button, internal notes save button, and crash recovery draft save button.
+   - **Records & Settings (`Records.tsx`)**: Upgraded Client, Project, Service, Starter Bundle, Milestone, Work Entry modal save buttons with smooth ~600ms confirmed saved transition before closing, and Business Settings save button with live status feedback.
+   - **Quotes (`Quotes.tsx`)**: Upgraded quote draft creation and quote edit save button with animated saving and saved confirmation.
+   - **Invoice Actions (`InvoiceActions.tsx`)**: Upgraded "Save email draft" and "Save reminder preferences" buttons.
+   - **App Shell (`App.tsx`)**: Upgraded "Save view" custom filter toolbar button.
+   - **Client Portal (`ClientPortalModal.tsx`)**: Upgraded portal settings update button.
+   - **Payment Allocations (`PaymentAllocationModal.tsx`)**: Upgraded payment & allocations submit button.
+3. **Rule Formalization & Component Provenance (`.cursor/rules/13-fluid-motion-interactions.mdc`, `docs/UI_COMPONENT_SOURCES.md`)**:
+   - Added explicit rule requirement to Rule 13 specifying that save and form commit buttons across the workspace must use the state-switching button pattern (`StateButton`).
+   - Documented Magic UI provenance matrix entry in `docs/UI_COMPONENT_SOURCES.md`.
+   - Ran `npm run sync:agents` and verified 0 drift with `npm run sync:agents:check`.
+4. **Verification**:
+   - Typecheck: **0 errors (`npm run check`)**.
+   - Agent sync check: **0 drift (`npm run sync:agents:check`)**.
+   - Punctuation check: **0 em dashes, 0 en dashes**.

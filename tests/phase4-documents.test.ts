@@ -281,7 +281,7 @@ describe('Phase 4: Worker Document Pipeline & Private R2 Storage', () => {
     const rendered1 = await document(mockEnv, 'owner-123', w, issued, false)
     expect(rendered1.byteLength).toBeGreaterThan(1000)
     expect(storage.size).toBe(1)
-    const expectedKey = `owner-123/${issued.id}/${issued.issuedAt}-issued-invoice.pdf`
+    const expectedKey = `owner-123/${issued.id}/${issued.issuedAt}-${issued.updated || 'init'}-issued-invoice.pdf`
     expect(storage.has(expectedKey)).toBe(true)
 
     // 2. Subsequent call: should read directly from R2 cache
@@ -322,7 +322,7 @@ describe('Phase 4: Worker Document Pipeline & Private R2 Storage', () => {
 
     // Cache issued document
     await document(mockEnv, 'owner-123', w, issued, false)
-    expect(storage.has(`owner-123/${issued.id}/${issued.issuedAt}-issued-invoice.pdf`)).toBe(true)
+    expect(storage.has(`owner-123/${issued.id}/${issued.issuedAt}-${issued.updated || 'init'}-issued-invoice.pdf`)).toBe(true)
 
     // Void the invoice
     w = applyCommand(w, { type: 'void', id: issued.id, reason: 'Voided reason' })
@@ -332,6 +332,6 @@ describe('Phase 4: Worker Document Pipeline & Private R2 Storage', () => {
     const voidBytes = await document(mockEnv, 'owner-123', w, voided, false)
     const voidDoc = await PDFDocument.load(voidBytes)
     expect(voidDoc.getPageCount()).toBe(1)
-    expect(storage.has(`owner-123/${issued.id}/${issued.issuedAt}-void-invoice.pdf`)).toBe(true)
+    expect(storage.has(`owner-123/${issued.id}/${issued.issuedAt}-${voided.updated || 'init'}-void-invoice.pdf`)).toBe(true)
   })
 })

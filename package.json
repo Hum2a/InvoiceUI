@@ -21,6 +21,7 @@
     "format": "prettier --write src tests scripts *.json *.ts",
     "types": "wrangler types",
     "dry-run": "npm run build && wrangler deploy --dry-run",
+    "email:test": "node scripts/test-email.mjs",
     "sync:agents": "node scripts/sync-agent-config.mjs",
     "sync:agents:check": "node scripts/sync-agent-config.mjs --check"
   },

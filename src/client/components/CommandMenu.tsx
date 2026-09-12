@@ -25,6 +25,7 @@ export function CommandMenu({
   onExport,
   onToggleTheme,
   onOpenShortcuts,
+  onOpenEmailDiagnostics,
 }: {
   open: boolean
   onClose: () => void
@@ -37,6 +38,7 @@ export function CommandMenu({
   onExport: (zip: boolean) => void
   onToggleTheme: () => void
   onOpenShortcuts: () => void
+  onOpenEmailDiagnostics?: () => void
 }) {
   const [query, setQuery] = useState('')
   const [selectedIndex, setSelectedIndex] = useState(0)
@@ -108,6 +110,16 @@ export function CommandMenu({
         },
       },
       {
+        id: 'act-nav-emails',
+        title: 'Open Sent Emails & Outbox',
+        subtitle: 'Inspect delivery logs and anti-spam activity',
+        category: 'Actions',
+        perform: () => {
+          onClose()
+          onNavigate('Emails')
+        },
+      },
+      {
         id: 'act-nav-settings',
         title: 'Open Settings',
         subtitle: 'Business identity, bank, and appearance',
@@ -115,6 +127,20 @@ export function CommandMenu({
         perform: () => {
           onClose()
           onNavigate('Settings')
+        },
+      },
+      {
+        id: 'act-dev-test-email',
+        title: 'Dev tools: Send test email',
+        subtitle: 'Test Resend deliverability, anti-spam headers, and template rendering',
+        category: 'Actions',
+        perform: () => {
+          onClose()
+          if (onOpenEmailDiagnostics) {
+            onOpenEmailDiagnostics()
+          } else {
+            onNavigate('Settings')
+          }
         },
       },
       {

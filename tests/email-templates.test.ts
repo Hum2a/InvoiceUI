@@ -6,6 +6,8 @@ import {
   renderMagicLinkEmailText,
   renderQuoteEmailHtml,
   renderQuoteEmailText,
+  formatSenderFrom,
+  getDeliverabilityHeaders,
   type EmailTemplateOptions,
   type MagicLinkEmailOptions,
   type QuoteEmailTemplateOptions,
@@ -409,5 +411,98 @@ describe('Spectacular HTML Email Templates', () => {
     expect(magicText).not.toMatch(/[\u2013\u2014]/)
     expect(quoteHtml).not.toMatch(/[\u2013\u2014]/)
     expect(quoteText).not.toMatch(/[\u2013\u2014]/)
+  })
+
+  it('formats RFC 5322 compliant sender display names and generates anti-spam deliverability headers', () => {
+    // formatSenderFrom
+    expect(formatSenderFrom('Apex Studio Ltd via InvoiceUI', 'billing@humza.website')).toBe(
+      '"Apex Studio Ltd via InvoiceUI" <billing@humza.website>'
+    )
+    expect(formatSenderFrom('Apex Studio Ltd', '"Default Sender" <billing@humza.website>')).toBe(
+      '"Apex Studio Ltd" <billing@humza.website>'
+    )
+    expect(formatSenderFrom('', 'billing@humza.website')).toBe('billing@humza.website')
+
+    // getDeliverabilityHeaders for standard transactional invoice
+    const invoiceHeaders = getDeliverabilityHeaders({
+      ownerId: 'owner123',
+      messageId: 'msg456',
+      kind: 'invoice',
+      invoiceNumber: 'INV-2026-0042',
+      unsubscribeEmail: 'billing@apexstudio.co.uk',
+    })
+    expect(invoiceHeaders['Auto-Submitted']).toBe('auto-generated')
+    expect(invoiceHeaders['X-Auto-Response-Suppress']).toBe('OOF, AutoReply')
+    expect(invoiceHeaders['X-Entity-Ref-ID']).toBe('invoiceui/owner123/msg456')
+    expect(invoiceHeaders['List-Unsubscribe']).toBeUndefined()
+
+    // getDeliverabilityHeaders for payment reminder includes List-Unsubscribe
+    const reminderHeaders = getDeliverabilityHeaders({
+      ownerId: 'owner123',
+      messageId: 'msg789',
+      kind: 'reminder',
+      invoiceNumber: 'INV-2026-0042',
+      unsubscribeEmail: 'billing@apexstudio.co.uk',
+    })
+    expect(reminderHeaders['Auto-Submitted']).toBe('auto-generated')
+    expect(reminderHeaders['X-Auto-Response-Suppress']).toBe('OOF, AutoReply')
+    expect(reminderHeaders['List-Unsubscribe']).toBe(
+      '<mailto:billing@apexstudio.co.uk?subject=Unsubscribe%20Invoice%20Reminders%20INV-2026-0042>'
+    )
+    expect(reminderHeaders['List-Unsubscribe-Post']).toBe('List-Unsubscribe=One-Click')
+  })
+
+  it('renders anti-spam hidden preheader and CAN-SPAM compliant footers with physical address and recipient transparency', () => {
+    const { invoice, business } = createSampleInvoice()
+    const options: EmailTemplateOptions = {
+      invoice,
+      business,
+      message: {
+        kind: 'invoice',
+        subject: `Invoice ${invoice.number} from ${business.name}`,
+        body: 'Please find attached your invoice.',
+      },
+      publicUrl: 'https://invoiceui.humza.website/api/public/owner123/tokenABC/invoice',
+    }
+
+    const html = renderInvoiceEmailHtml(options)
+    const text = renderInvoiceEmailText(options)
+
+    // Hidden anti-spam inbox preview snippet
+    expect(html).toContain('<!-- Hidden Anti-Spam Inbox Preview Snippet -->')
+    expect(html).toContain('mso-hide:all')
+    expect(html).toContain('&#847;&zwnj;&nbsp;')
+    expect(html).toContain('Apex Studio Ltd: Invoice INV-2026-0042')
+
+    // Document header anti-spam metadata
+    expect(html).toContain('content="telephone=no, date=no, address=no, email=no"')
+    expect(html).toContain('name="x-apple-disable-message-reformatting"')
+
+    // CAN-SPAM / GDPR physical address in footer
+    expect(html).toContain('Deliverability & Legal Compliance Footer')
+    expect(html).toContain('100 Innovation Way · London · EC1A 1BB · United Kingdom')
+    expect(html).toContain('You received this transactional invoice because you have an active account')
+    expect(html).toContain('Sent to <span style="color:#71717a;">accounts@mentage.com</span>')
+
+    // Text counterpart alignment
+    expect(text).toContain('Sender: Apex Studio Ltd')
+    expect(text).toContain('Address: 100 Innovation Way, London, EC1A 1BB, United Kingdom')
+    expect(text).toContain('Recipient: accounts@mentage.com')
+    expect(text).toContain('Notice: Transactional invoice issued by Apex Studio Ltd.')
+
+    // Payment reminder mode
+    const reminderOptions: EmailTemplateOptions = {
+      invoice,
+      business,
+      message: {
+        kind: 'reminder',
+        subject: `Reminder: Invoice ${invoice.number}`,
+        body: 'Outstanding balance reminder.',
+      },
+      publicUrl: 'https://invoiceui.humza.website/api/public/owner123/tokenABC/invoice',
+    }
+    const reminderHtml = renderInvoiceEmailHtml(reminderOptions)
+    expect(reminderHtml).toContain('Payment reminder: Invoice INV-2026-0042 from Apex Studio Ltd')
+    expect(reminderHtml).toContain('To pause reminders or discuss payment options, reply directly to this email')
   })
 })

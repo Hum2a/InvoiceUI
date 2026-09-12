@@ -11,6 +11,18 @@ import { applyCommand, buildClientPortalView, buildClientStatement, commandSchem
 import { document, statementDocument } from './documents'
 import { filename, filenameStatement } from '../shared/pdf'
 import { deliver, scheduled } from './delivery'
+import {
+  renderDiagnosticsTestEmailHtml,
+  renderDiagnosticsTestEmailText,
+  renderInvoiceEmailHtml,
+  renderInvoiceEmailText,
+  renderReminderEmailHtml,
+  renderReminderEmailText,
+  renderMagicLinkEmailHtml,
+  renderMagicLinkEmailText,
+  formatSenderFrom,
+  getDeliverabilityHeaders,
+} from '../shared/emailTemplate'
 
 const app=new Hono<{Bindings:Env;Variables:{owner:string}}>()
 app.use('*',secureHeaders())
@@ -64,6 +76,173 @@ app.post('/api/private/command',async c=>{const body=z.object({version:z.number(
 app.get('/api/private/logo',async c=>{if(!c.env.DOCUMENTS)return c.json({error:'Document storage not configured'},503);const png=await c.env.DOCUMENTS.get(`${c.get('owner')}/logo.png`);if(png)return new Response(await png.arrayBuffer(),{headers:{'Content-Type':'image/png','Cache-Control':'private, max-age=3600'}});const jpg=await c.env.DOCUMENTS.get(`${c.get('owner')}/logo.jpg`);if(jpg)return new Response(await jpg.arrayBuffer(),{headers:{'Content-Type':'image/jpeg','Cache-Control':'private, max-age=3600'}});return c.json({error:'No logo uploaded'},404)})
 app.get('/api/private/invoices/:id/pdf',async c=>{const w=await read(c.env,c.get('owner'));const i=w.data.invoices.find(i=>i.id===c.req.param('id'));if(!i)return c.json({error:'Invoice not found'},404);const breakdown=c.req.query('breakdown')==='true';const bytes=await document(c.env,c.get('owner'),w.data,i,breakdown);return new Response(new Uint8Array(bytes),{headers:{'Content-Type':'application/pdf','Content-Disposition':`attachment; filename*=UTF-8''${encodeURIComponent(filename(i,breakdown))}`,'Cache-Control':'no-store'}})})
 app.get('/api/private/export',async c=>{const w=await read(c.env,c.get('owner'));if(c.req.query('format')!=='zip')return c.json({format:'invoiceui-backup',schemaVersion:1,exportedAt:new Date().toISOString(),...w});const files:Record<string,Uint8Array>={'workspace.json':strToU8(JSON.stringify({format:'invoiceui-backup',schemaVersion:1,...w},null,2))};let size=files['workspace.json'].length;for(const i of w.data.invoices.filter(i=>i.issuedAt)){for(const breakdown of i.breakdown?[false,true]:[false]){const bytes=await document(c.env,c.get('owner'),w.data,i,breakdown);size+=bytes.length;if(size>40_000_000)return c.json({error:'PDF archive exceeds 40MB; export JSON and download PDFs individually'},413);files[`${i.id}/${filename(i,breakdown)}`]=bytes}}return new Response(zipSync(files),{headers:{'Content-Type':'application/zip','Content-Disposition':'attachment; filename="InvoiceUI-backup.zip"','Cache-Control':'no-store'}})})
+app.post('/api/private/dev/test-email',async c=>{
+  if(!c.env.RESEND_API_KEY){
+    return c.json({error:'Resend API key is not configured on this environment (RESEND_API_KEY is missing).'},503);
+  }
+  const body=(await c.req.json().catch(()=>({}))) as {
+    to?:string;
+    scenario?:'smoke'|'invoice'|'reminder'|'magic-link';
+    customNote?:string;
+  };
+  const targetEmail=(body.to?.trim()||c.env.OWNER_EMAIL).toLowerCase();
+  const scenario=body.scenario||'smoke';
+  const customNote=body.customNote?.trim()||undefined;
+
+  const current=await read(c.env,c.get('owner'));
+  const biz=current.data.business;
+  const sampleInvoice=current.data.invoices[0]||{
+    id:'demo-sample',
+    number:`${biz.prefix||'INV'}-SAMPLE-01`,
+    clientId:'sample',
+    projectId:'',
+    client:{id:'sample',name:'Acme Test Client',email:targetEmail,address:'123 Test Street\nLondon\nEC1A 1BB'},
+    issueDate:today(biz.timezone),
+    dueDate:today(biz.timezone),
+    currency:biz.currency||'GBP',
+    lines:[
+      {id:'1',description:'Sample Development Deliverable',quantity:1,rate:'450.00',unit:'unit'},
+      {id:'2',description:'Email Infrastructure Verification',quantity:2,rate:'75.00',unit:'hour'}
+    ],
+    notes:'Payment due within 14 days.',
+    terms:14,
+    tax:0,
+    deposit:'0',
+    discount:'0',
+    payments:[],
+    history:[],
+    reminder:{enabled:false,days:7},
+    lifecycle:'issued',
+    created:new Date().toISOString(),
+    updated:new Date().toISOString(),
+  };
+
+  const senderFrom=formatSenderFrom(`${biz.name||'InvoiceUI'} Test`,c.env.EMAIL_FROM);
+  let subject=`[Test] InvoiceUI Email Deliverability (${scenario})`;
+  let html='';
+  let text='';
+  const deliverabilityHeaders=getDeliverabilityHeaders({
+    ownerId:c.get('owner'),
+    kind:scenario==='smoke'?'diagnostics':(scenario as any),
+    messageId:crypto.randomUUID(),
+    invoiceNumber:sampleInvoice.number,
+    unsubscribeEmail:biz.email||c.env.OWNER_EMAIL,
+  });
+
+  const startTime=Date.now();
+
+  if(scenario==='smoke'){
+    subject=`[Test Smoke] InvoiceUI Outbound Deliverability Check`;
+    html=renderDiagnosticsTestEmailHtml({
+      recipient:targetEmail,
+      scenario:'smoke',
+      appUrl:c.env.APP_URL,
+      senderFrom,
+      note:customNote,
+      businessName:biz.name||'InvoiceUI Workspace',
+    });
+    text=renderDiagnosticsTestEmailText({
+      recipient:targetEmail,
+      scenario:'smoke',
+      appUrl:c.env.APP_URL,
+      senderFrom,
+      note:customNote,
+      businessName:biz.name||'InvoiceUI Workspace',
+    });
+  }else if(scenario==='invoice'){
+    subject=`[Test Invoice] ${sampleInvoice.number} from ${biz.name||'InvoiceUI'}`;
+    html=renderInvoiceEmailHtml({
+      invoice:sampleInvoice as any,
+      business:biz,
+      client:sampleInvoice.client as any,
+      message:{
+        kind:'invoice',
+        subject,
+        body:customNote||`Hi there,\n\nThis is a test invoice email sent via the developer tools to verify deliverability and HTML styling in your inbox.\n\nKind regards,\n${biz.name||'The Team'}`,
+      },
+      appUrl:c.env.APP_URL,
+    });
+    text=renderInvoiceEmailText({
+      invoice:sampleInvoice as any,
+      business:biz,
+      client:sampleInvoice.client as any,
+      message:{
+        kind:'invoice',
+        subject,
+        body:customNote||`Hi there,\n\nThis is a test invoice email sent via the developer tools.`,
+      },
+    });
+  }else if(scenario==='reminder'){
+    subject=`[Test Reminder] Overdue Payment: ${sampleInvoice.number}`;
+    html=renderReminderEmailHtml({
+      invoice:sampleInvoice as any,
+      business:biz,
+      client:sampleInvoice.client as any,
+      appUrl:c.env.APP_URL,
+    });
+    text=renderReminderEmailText({
+      invoice:sampleInvoice as any,
+      business:biz,
+      client:sampleInvoice.client as any,
+    });
+  }else if(scenario==='magic-link'){
+    subject=`[Test Auth] Sign in to InvoiceUI (Diagnostics Preview)`;
+    html=renderMagicLinkEmailHtml({
+      email:targetEmail,
+      url:`${c.env.APP_URL}/?test_auth_preview=true`,
+      appUrl:c.env.APP_URL,
+      expiresInMinutes:10,
+    });
+    text=renderMagicLinkEmailText({
+      email:targetEmail,
+      url:`${c.env.APP_URL}/?test_auth_preview=true`,
+      expiresInMinutes:10,
+    });
+  }
+
+  const {data,error}=await new Resend(c.env.RESEND_API_KEY).emails.send({
+    from:senderFrom,
+    to:targetEmail,
+    replyTo:biz.email||c.env.OWNER_EMAIL,
+    subject,
+    html,
+    text,
+    headers:deliverabilityHeaders,
+  });
+
+  const latencyMs=Date.now()-startTime;
+
+  if(error){
+    return c.json({
+      ok:false,
+      error:error.message||'Email provider rejected the test send',
+      diagnostic:{
+        targetEmail,
+        senderFrom,
+        scenario,
+        latencyMs,
+        headers:deliverabilityHeaders,
+        suggestion:error.message?.toLowerCase().includes('domain')
+          ?'The sending domain may not be verified in Resend yet. Check DNS SPF/DKIM records at resend.com/domains.'
+          :error.message?.toLowerCase().includes('key')
+          ?'Check your RESEND_API_KEY in Cloudflare Worker secrets.'
+          :'Check Resend dashboard logs for detailed dispatch rejection reasons.',
+      }
+    },400);
+  }
+
+  return c.json({
+    ok:true,
+    id:data?.id,
+    to:targetEmail,
+    from:senderFrom,
+    subject,
+    scenario,
+    headers:deliverabilityHeaders,
+    latencyMs,
+    timestamp:new Date().toISOString(),
+  });
+})
 app.notFound(c=>c.json({error:'Route not found'},404))
 app.onError((error,c)=>{if(error instanceof Conflict)return c.json({error:error.message},409);if(error instanceof z.ZodError)return c.json({error:error.issues.map(i=>`${i.path.join('.')}: ${i.message}`).join('; ')},400);console.error(JSON.stringify({event:'api_error',path:c.req.path,name:error.name}));return c.json({error:error.message.startsWith('This')?error.message:'The request could not be completed. Check the data or try again.'},400)})
 export { app }

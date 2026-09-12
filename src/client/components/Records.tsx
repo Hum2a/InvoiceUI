@@ -24,13 +24,14 @@ import {
   type WorkEntry,
   type Milestone,
 } from '../../shared/domain'
-import { Button, Field, Modal, Empty, Badge, useConfirm } from './ui'
+import { Button, StateButton, type ButtonStatus, Field, Modal, Empty, Badge, useConfirm } from './ui'
 import { NumberTicker } from './ui/NumberTicker'
 import { PaymentAllocationModal } from './PaymentAllocationModal'
 import { RefundModal } from './RefundModal'
 import { StatementModal } from './StatementModal'
 import { ClientPortalModal } from './ClientPortalModal'
 import { BankInstructionsEditor } from './BankInstructionsEditor'
+import { Mail } from './ui/AnimatedIcon'
 
 type Props = {
   workspace: Workspace
@@ -311,6 +312,10 @@ export function Records({
   const [editingMilestone, setEditingMilestone] = useState<Milestone | null>(null)
   const [editingWorkEntry, setEditingWorkEntry] = useState<WorkEntry | null>(null)
   const [selectedWorkEntryIds, setSelectedWorkEntryIds] = useState<Set<string>>(new Set())
+  const [recordSaveStatus, setRecordSaveStatus] = useState<ButtonStatus>('idle')
+  const [starterSaveStatus, setStarterSaveStatus] = useState<ButtonStatus>('idle')
+  const [milestoneSaveStatus, setMilestoneSaveStatus] = useState<ButtonStatus>('idle')
+  const [workEntrySaveStatus, setWorkEntrySaveStatus] = useState<ButtonStatus>('idle')
 
   const toggleWorkEntry = (id: string) => {
     setSelectedWorkEntryIds(prev => {
@@ -389,6 +394,7 @@ export function Records({
   async function save() {
     if (!value) return
     try {
+      setRecordSaveStatus('saving')
       await onCommand(
         kind === 'Clients'
           ? { type: 'client', value: value as Client }
@@ -396,9 +402,14 @@ export function Records({
             ? { type: 'project', value: value as Project }
             : { type: 'service', value: value as Service }
       )
+      setRecordSaveStatus('saved')
+      await new Promise(r => setTimeout(r, 600))
       setValue(null)
+      setRecordSaveStatus('idle')
     } catch (e) {
+      setRecordSaveStatus('error')
       setError(e instanceof Error ? e.message : 'Unable to save')
+      setTimeout(() => setRecordSaveStatus('idle'), 2000)
     }
   }
 
@@ -407,10 +418,16 @@ export function Records({
     try {
       if (!starterValue.name.trim()) throw new Error('Starter name is required')
       if (!starterValue.lines.length) throw new Error('At least one line item is required')
+      setStarterSaveStatus('saving')
       await onCommand({ type: 'starter', value: starterValue })
+      setStarterSaveStatus('saved')
+      await new Promise(r => setTimeout(r, 600))
       setStarterValue(null)
+      setStarterSaveStatus('idle')
     } catch (e) {
+      setStarterSaveStatus('error')
       setError(e instanceof Error ? e.message : 'Unable to save starter bundle')
+      setTimeout(() => setStarterSaveStatus('idle'), 2000)
     }
   }
 
@@ -1149,9 +1166,14 @@ export function Records({
                   Delete
                 </Button>
                 <Button onClick={() => setValue(null)}>Cancel</Button>
-                <Button variant="primary" type="submit">
-                  Save client
-                </Button>
+                <StateButton
+                  variant="primary"
+                  type="submit"
+                  status={recordSaveStatus}
+                  idleText="Save client"
+                  savingText="Saving client..."
+                  savedText="Client saved!"
+                />
               </div>
             </form>
           )}
@@ -1863,9 +1885,14 @@ export function Records({
                   Delete
                 </Button>
                 <Button onClick={() => setValue(null)}>Cancel</Button>
-                <Button variant="primary" type="submit">
-                  Save project
-                </Button>
+                <StateButton
+                  variant="primary"
+                  type="submit"
+                  status={recordSaveStatus}
+                  idleText="Save project"
+                  savingText="Saving project..."
+                  savedText="Project saved!"
+                />
               </div>
             </form>
           )}
@@ -2129,9 +2156,14 @@ export function Records({
                 </Button>
               )}
               <Button onClick={() => setValue(null)}>Cancel</Button>
-              <Button variant="primary" type="submit">
-                Save {kind.slice(0, -1).toLowerCase()}
-              </Button>
+              <StateButton
+                variant="primary"
+                type="submit"
+                status={recordSaveStatus}
+                idleText={`Save ${kind.slice(0, -1).toLowerCase()}`}
+                savingText={`Saving ${kind.slice(0, -1).toLowerCase()}...`}
+                savedText={`${kind.slice(0, -1)} saved!`}
+              />
             </div>
           </form>
         )}
@@ -2330,9 +2362,14 @@ export function Records({
                 </Button>
               )}
               <Button onClick={() => setStarterValue(null)}>Cancel</Button>
-              <Button variant="primary" type="submit">
-                Save starter bundle
-              </Button>
+              <StateButton
+                variant="primary"
+                type="submit"
+                status={starterSaveStatus}
+                idleText="Save starter bundle"
+                savingText="Saving bundle..."
+                savedText="Bundle saved!"
+              />
             </div>
           </form>
         )}
@@ -2399,9 +2436,14 @@ export function Records({
                     },
                   })
                 }
+                setMilestoneSaveStatus('saved')
+                await new Promise(r => setTimeout(r, 600))
                 setEditingMilestone(null)
+                setMilestoneSaveStatus('idle')
               } catch (err) {
+                setMilestoneSaveStatus('error')
                 setError(err instanceof Error ? err.message : 'Could not save milestone')
+                setTimeout(() => setMilestoneSaveStatus('idle'), 2000)
               }
             }}
             className="space-y-4"
@@ -2490,9 +2532,14 @@ export function Records({
                 </Button>
               )}
               <Button onClick={() => setEditingMilestone(null)}>Cancel</Button>
-              <Button variant="primary" type="submit">
-                Save milestone
-              </Button>
+              <StateButton
+                variant="primary"
+                type="submit"
+                status={milestoneSaveStatus}
+                idleText="Save milestone"
+                savingText="Saving milestone..."
+                savedText="Milestone saved!"
+              />
             </div>
           </form>
         </Modal>
@@ -2540,9 +2587,14 @@ export function Records({
                     },
                   })
                 }
+                setWorkEntrySaveStatus('saved')
+                await new Promise(r => setTimeout(r, 600))
                 setEditingWorkEntry(null)
+                setWorkEntrySaveStatus('idle')
               } catch (err) {
+                setWorkEntrySaveStatus('error')
                 setError(err instanceof Error ? err.message : 'Could not save work entry')
+                setTimeout(() => setWorkEntrySaveStatus('idle'), 2000)
               }
             }}
             className="space-y-4"
@@ -2667,9 +2719,14 @@ export function Records({
                 </Button>
               )}
               <Button onClick={() => setEditingWorkEntry(null)}>Cancel</Button>
-              <Button variant="primary" type="submit">
-                Save work entry
-              </Button>
+              <StateButton
+                variant="primary"
+                type="submit"
+                status={workEntrySaveStatus}
+                idleText="Save work entry"
+                savingText="Saving work entry..."
+                savedText="Work entry saved!"
+              />
             </div>
           </form>
         </Modal>
@@ -2682,9 +2739,16 @@ export function Settings({
   workspace: w,
   onCommand,
   onExport,
-}: Omit<Props, 'onFilter'> & { onExport: (zip: boolean) => void }) {
+  onOpenEmailDiagnostics,
+  emailEnabled = false,
+}: Omit<Props, 'onFilter'> & {
+  onExport: (zip: boolean) => void
+  onOpenEmailDiagnostics?: () => void
+  emailEnabled?: boolean
+}) {
   const [b, setB] = useState<Business>(w.business)
   const [message, setMessage] = useState('')
+  const [businessSaveStatus, setBusinessSaveStatus] = useState<ButtonStatus>('idle')
 
   useEffect(() => {
     setB(w.business)
@@ -2720,11 +2784,19 @@ export function Settings({
       </div>
       <form
         className="settings-grid"
-        onSubmit={e => {
+        onSubmit={async e => {
           e.preventDefault()
-          void onCommand({ type: 'business', value: b })
-            .then(() => setMessage('Business details saved.'))
-            .catch(e => setMessage(e.message))
+          try {
+            setBusinessSaveStatus('saving')
+            await onCommand({ type: 'business', value: b })
+            setBusinessSaveStatus('saved')
+            setMessage('Business details saved.')
+            setTimeout(() => setBusinessSaveStatus('idle'), 2500)
+          } catch (err) {
+            setBusinessSaveStatus('error')
+            setMessage(err instanceof Error ? err.message : 'Unable to save settings')
+            setTimeout(() => setBusinessSaveStatus('idle'), 2000)
+          }
         }}
       >
         <section className="panel space-y-4">
@@ -2919,9 +2991,14 @@ export function Settings({
 
         <div className="settings-footer">
           <p role="status">{message}</p>
-          <Button variant="primary" type="submit">
-            Save business settings
-          </Button>
+          <StateButton
+            variant="primary"
+            type="submit"
+            status={businessSaveStatus}
+            idleText="Save business settings"
+            savingText="Saving settings..."
+            savedText="Settings saved!"
+          />
         </div>
       </form>
 
@@ -2934,6 +3011,45 @@ export function Settings({
           <div className="actions">
             <Button onClick={() => onExport(false)}>Export JSON</Button>
             <Button onClick={() => onExport(true)}>Export with PDFs</Button>
+          </div>
+        </div>
+      </section>
+
+      <section className="panel mt-6">
+        <div className="section-heading">
+          <div>
+            <h2>Developer tools & email deliverability</h2>
+            <p className="muted">
+              Test outbound email delivery via Resend, verify anti-spam deliverability headers, and preview templates.
+            </p>
+          </div>
+          {onOpenEmailDiagnostics && (
+            <div className="actions">
+              <Button onClick={onOpenEmailDiagnostics}>
+                <Mail size={13} animateOnHover className="mr-1.5 inline" />
+                Open email diagnostics
+              </Button>
+            </div>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-xl bg-[var(--soft)] border border-[var(--line)] text-xs mt-3">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-[var(--ink)]">Resend Provider:</span>
+            {emailEnabled ? (
+              <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30">
+                Connected
+              </Badge>
+            ) : (
+              <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30">
+                API Key Missing
+              </Badge>
+            )}
+          </div>
+          <div className="flex items-center gap-2 text-[var(--muted)]">
+            <span>Sending Address:</span>
+            <code className="text-[11px] font-mono bg-[var(--card)] px-1.5 py-0.5 rounded border border-[var(--line)]">
+              invoices@humza.website
+            </code>
           </div>
         </div>
       </section>

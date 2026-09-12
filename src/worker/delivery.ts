@@ -3,7 +3,7 @@ import { Buffer } from 'node:buffer'
 import { neon } from '@neondatabase/serverless'
 import { status, runSchedules, today, totals } from '../shared/domain'
 import { filename } from '../shared/pdf'
-import { renderInvoiceEmailHtml, renderInvoiceEmailText } from '../shared/emailTemplate'
+import { renderInvoiceEmailHtml, renderInvoiceEmailText, formatSenderFrom, getDeliverabilityHeaders } from '../shared/emailTemplate'
 import { document } from './documents'
 import { read, update } from './store'
 
@@ -20,9 +20,13 @@ export async function deliver(env:Env,owner:string,messageId:string){if(!env.RES
  const fresh=await read(env,owner);const current=fresh.data.invoices.find(i=>i.id===invoice.id);const freshDay=today(fresh.data.business.timezone);const freshPaused=Boolean(current?.reminder?.pausedUntil&&current.reminder.pausedUntil>=freshDay);const freshBal=current?totals(current,fresh.data.creditNotes).balance:'0';const freshPaid=Number(freshBal)<=0;
  if(!current||current.lifecycle!=='issued'||(message.kind==='reminder'&&(status(current,freshDay,fresh.data.creditNotes)!=='overdue'||!current.reminder.enabled||!fresh.data.business.autoReminders||freshPaused||freshPaid||fresh.data.messages.some(prev=>prev.invoiceId===current.id&&prev.status==='bounced')))){await update(env,owner,w=>{const m=w.messages.find(m=>m.id===messageId);if(m)m.status='cancelled';return w});return}
  const publicUrl=invoice.share?`${env.APP_URL}/api/public/${encodeURIComponent(owner)}/${invoice.share.token}/invoice`:undefined;
- const emailHtml=renderInvoiceEmailHtml({invoice:current,business:current.business||fresh.data.business,message,client:current.client,creditNotes:fresh.data.creditNotes,publicUrl,appUrl:env.APP_URL});
- const emailText=renderInvoiceEmailText({invoice:current,business:current.business||fresh.data.business,message,client:current.client,creditNotes:fresh.data.creditNotes,publicUrl});
- const {data,error}=await new Resend(env.RESEND_API_KEY).emails.send({from:env.EMAIL_FROM,to:message.to,cc:message.cc,replyTo:message.replyTo||undefined,subject:message.subject,html:emailHtml,text:emailText,attachments},{idempotencyKey:`invoiceui/${owner}/${message.id}`});
+ const activeBiz=current.business||fresh.data.business;
+ const emailHtml=renderInvoiceEmailHtml({invoice:current,business:activeBiz,message,client:current.client,creditNotes:fresh.data.creditNotes,publicUrl,appUrl:env.APP_URL});
+ const emailText=renderInvoiceEmailText({invoice:current,business:activeBiz,message,client:current.client,creditNotes:fresh.data.creditNotes,publicUrl});
+ const senderFrom=formatSenderFrom(`${activeBiz.name} via InvoiceUI`,env.EMAIL_FROM);
+ const replyTo=message.replyTo||activeBiz.email||env.OWNER_EMAIL||undefined;
+ const headers=getDeliverabilityHeaders({ownerId:owner,messageId:message.id,kind:message.kind,invoiceNumber:invoice.number,unsubscribeEmail:activeBiz.email||env.OWNER_EMAIL});
+ const {data,error}=await new Resend(env.RESEND_API_KEY).emails.send({from:senderFrom,to:message.to,cc:message.cc,replyTo,subject:message.subject,html:emailHtml,text:emailText,attachments,headers},{idempotencyKey:`invoiceui/${owner}/${message.id}`});
  if(error)throw new Error(error.message||'Email provider rejected the request');
  await update(env,owner,w=>{const m=w.messages.find(m=>m.id===messageId)!;m.providerId=data!.id;if(m.status==='sending')m.status='sent';m.error=undefined;return w})
  }catch(err){const msg=err instanceof Error?err.message:'Delivery failed';await update(env,owner,w=>{const m=w.messages.find(m=>m.id===messageId);if(m?.status==='sending'&&m.error===claim){m.status='failed';m.error=msg}return w})}

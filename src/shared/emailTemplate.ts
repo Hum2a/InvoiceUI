@@ -41,7 +41,7 @@ export interface QuoteEmailTemplateOptions {
 export interface DeliverabilityHeaderOptions {
   messageId?: string
   ownerId?: string
-  kind?: 'invoice' | 'reminder' | 'magic-link' | 'quote'
+  kind?: 'invoice' | 'reminder' | 'magic-link' | 'quote' | 'diagnostics'
   invoiceNumber?: string
   unsubscribeEmail?: string
 }
@@ -62,9 +62,11 @@ export function getDeliverabilityHeaders(options: DeliverabilityHeaderOptions = 
   }
   if (options.ownerId && options.messageId) {
     headers['X-Entity-Ref-ID'] = `invoiceui/${options.ownerId}/${options.messageId}`
+  } else if (options.kind === 'diagnostics') {
+    headers['X-Entity-Ref-ID'] = `invoiceui-diagnostics/${options.messageId || Date.now()}`
   }
   if (options.kind === 'reminder' && options.unsubscribeEmail) {
-    const inv = options.invoiceNumber ? ` ${encodeURIComponent(options.invoiceNumber)}` : ''
+    const inv = options.invoiceNumber ? `%20${encodeURIComponent(options.invoiceNumber)}` : ''
     headers['List-Unsubscribe'] = `<mailto:${options.unsubscribeEmail}?subject=Unsubscribe%20Invoice%20Reminders${inv}>`
     headers['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click'
   }
@@ -900,6 +902,34 @@ export function renderInvoiceEmailText(options: EmailTemplateOptions): string {
   return lines.join('\n')
 }
 
+export function renderReminderEmailHtml(options: EmailTemplateOptions): string {
+  const opts: EmailTemplateOptions = {
+    ...options,
+    message: {
+      kind: 'reminder',
+      subject: options.message?.subject || `Payment Reminder: Invoice ${options.invoice.number}`,
+      body:
+        options.message?.body ||
+        `This is a friendly reminder that invoice ${options.invoice.number} is outstanding.`,
+    },
+  }
+  return renderInvoiceEmailHtml(opts)
+}
+
+export function renderReminderEmailText(options: EmailTemplateOptions): string {
+  const opts: EmailTemplateOptions = {
+    ...options,
+    message: {
+      kind: 'reminder',
+      subject: options.message?.subject || `Payment Reminder: Invoice ${options.invoice.number}`,
+      body:
+        options.message?.body ||
+        `This is a friendly reminder that invoice ${options.invoice.number} is outstanding.`,
+    },
+  }
+  return renderInvoiceEmailText(opts)
+}
+
 // -----------------------------------------------------------------------------
 // Magic Link Authentication Email Templates
 // -----------------------------------------------------------------------------
@@ -1122,13 +1152,27 @@ export function renderQuoteEmailHtml(options: QuoteEmailTemplateOptions): string
   const clientAddressLines = formatClientAddressLines(client)
   const businessAddressLines = formatAddressLines(b)
   const customMessage = m?.body?.trim() || ''
+  const recipientEmail = m?.to || client.email || ''
+  const preheaderText = `Quotation ${q.quoteNumber || 'Draft'} (Rev ${q.revision || 1}) from ${b.name} for ${formattedTotal}. Valid until ${formatDisplayDate(q.expiryDate)}.`
 
   return `<!DOCTYPE html>
 <html lang="en" xmlns="http://www.w3.org/1999/xhtml">
 <head>
-  <meta charset="utf-8" />
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="color-scheme" content="light dark" />
+  <meta name="format-detection" content="telephone=no, date=no, address=no, email=no" />
+  <meta name="x-apple-disable-message-reformatting" />
+  <!--[if mso]>
+  <noscript>
+    <xml>
+      <o:OfficeDocumentSettings>
+        <o:PixelsPerInch>96</o:PixelsPerInch>
+      </o:OfficeDocumentSettings>
+    </xml>
+  </noscript>
+  <![endif]-->
   <title>${escapeHtml(m?.subject || `Quote ${q.quoteNumber} (Rev ${q.revision}) from ${b.name}`)}</title>
   <style>
     body {
@@ -1167,10 +1211,11 @@ export function renderQuoteEmailHtml(options: QuoteEmailTemplateOptions): string
   </style>
 </head>
 <body style="margin:0;padding:0;background-color:#f4f4f5;color:#18181b;">
+  ${renderPreheaderSnippet(preheaderText)}
   <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color:#f4f4f5;padding:32px 12px;">
     <tr>
       <td align="center">
-        <!-- Main Card Container -->
+        <!-- Main Container Card -->
         <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="max-width:620px;margin:0 auto;background-color:#ffffff;border-radius:18px;border:1px solid #e4e4e7;box-shadow:0 10px 30px rgba(0,0,0,0.06);overflow:hidden;" class="email-wrapper">
           
           <!-- Top Accent Band -->
@@ -1178,7 +1223,7 @@ export function renderQuoteEmailHtml(options: QuoteEmailTemplateOptions): string
             <td style="height:6px;background-color:${accent};"></td>
           </tr>
 
-          <!-- Header Section -->
+          <!-- Header & Brand Bar -->
           <tr>
             <td style="padding:28px 28px 20px 28px;">
               <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
@@ -1186,18 +1231,24 @@ export function renderQuoteEmailHtml(options: QuoteEmailTemplateOptions): string
                   <td style="vertical-align:top;">
                     ${
                       b.logo
-                        ? `<img src="${b.logo}" alt="${escapeHtml(b.name)}" style="height:44px;max-width:180px;object-fit:contain;display:block;" />`
-                        : `<div style="display:inline-block;padding:8px 14px;background-color:#18181b;color:#ffffff;font-size:14px;font-weight:700;border-radius:10px;letter-spacing:0.04em;">${escapeHtml(
-                            b.name || 'QUOTATION'
-                          )}</div>`
+                        ? `<img src="${b.logo}" alt="${escapeHtml(b.name)} logo" style="max-width:140px;max-height:48px;display:block;margin-bottom:12px;" />`
+                        : `<div style="width:40px;height:40px;line-height:40px;background-color:${accent};color:${textColorOnAccent};font-size:20px;font-weight:700;border-radius:10px;text-align:center;margin-bottom:10px;">▤</div>`
                     }
+                    <div style="font-size:20px;font-weight:800;color:#18181b;letter-spacing:-0.02em;line-height:1.2;">
+                      ${escapeHtml(b.name)}
+                    </div>
                   </td>
                   <td align="right" style="vertical-align:top;">
-                    <div style="display:inline-block;padding:5px 12px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;background-color:#f4f4f5;color:#3f3f46;">
-                      ${escapeHtml(q.status)} (Rev ${q.revision})
+                    <div style="font-size:24px;font-weight:800;letter-spacing:-0.03em;color:#18181b;">
+                      ${escapeHtml(q.quoteNumber || 'Quotation')}
                     </div>
-                    <div style="margin-top:6px;font-size:16px;font-weight:800;color:#18181b;letter-spacing:-0.01em;">
-                      ${escapeHtml(q.quoteNumber || 'QUOTE')}
+                    <div style="font-size:11px;color:#71717a;margin-top:2px;">
+                      Revision ${q.revision} · ${formatDisplayDate(q.issueDate)}
+                    </div>
+                    <div style="margin-top:8px;">
+                      <span style="display:inline-block;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;background-color:#f4f4f5;color:#52525b;border:1px solid #e4e4e7;">
+                        ${q.status}
+                      </span>
                     </div>
                   </td>
                 </tr>
@@ -1205,19 +1256,19 @@ export function renderQuoteEmailHtml(options: QuoteEmailTemplateOptions): string
             </td>
           </tr>
 
+          <!-- Optional Message Callout Box -->
           ${
             customMessage
               ? `
-          <!-- Custom Note Callout -->
           <tr>
-            <td style="padding:0 28px 24px 28px;">
-              <div style="background-color:#fafafa;border-left:4px solid ${accent};border-radius:0 12px 12px 0;padding:16px 20px;">
-                <p style="margin:0 0 6px 0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#71717a;">
-                  Message from ${escapeHtml(b.name || 'Sender')}
+            <td style="padding:0 28px 20px 28px;">
+              <div style="background-color:#fafafa;border:1px solid #e4e4e7;border-left:4px solid ${accent};border-radius:10px;padding:16px 20px;">
+                <p style="margin:0 0 6px 0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#71717a;">
+                  Message from ${escapeHtml(b.name)}
                 </p>
-                <div style="margin:0;font-size:14px;line-height:1.6;color:#27272a;white-space:pre-line;">
-                  ${escapeHtml(customMessage)}
-                </div>
+                <div style="font-size:13px;color:#27272a;line-height:1.6;white-space:pre-line;">${escapeHtml(
+                  customMessage
+                )}</div>
               </div>
             </td>
           </tr>
@@ -1333,7 +1384,9 @@ export function renderQuoteEmailHtml(options: QuoteEmailTemplateOptions): string
                             q.notes
                               ? `
                           <p style="margin:0 0 4px 0;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#71717a;">Proposal Notes</p>
-                          <p style="margin:0;font-size:12px;color:#52525b;line-height:1.4;white-space:pre-line;">${escapeHtml(q.notes)}</p>
+                          <p style="margin:0;font-size:12px;color:#52525b;line-height:1.4;white-space:pre-line;">${escapeHtml(
+                            q.notes
+                          )}</p>
                           `
                               : ''
                           }
@@ -1348,7 +1401,9 @@ export function renderQuoteEmailHtml(options: QuoteEmailTemplateOptions): string
                               hasDiscount
                                 ? `
                             <tr>
-                              <td style="font-size:12px;color:#71717a;padding:3px 0;">Discount ${q.discountType === 'percent' ? `(${q.discount}%)` : ''}</td>
+                              <td style="font-size:12px;color:#71717a;padding:3px 0;">Discount (${
+                                q.discountType === 'percent' ? `${q.discount}%` : 'fixed'
+                              })</td>
                               <td align="right" style="font-size:12px;color:#16a34a;font-weight:600;padding:3px 0;">-${formattedDiscount}</td>
                             </tr>
                             `
@@ -1423,14 +1478,26 @@ export function renderQuoteEmailHtml(options: QuoteEmailTemplateOptions): string
             </td>
           </tr>
 
-          <!-- Footer -->
+          <!-- Deliverability & Legal Compliance Footer -->
           <tr>
             <td style="background-color:#fafafa;border-top:1px solid #e4e4e7;padding:24px 28px;text-align:center;">
-              <p style="margin:0;font-size:12px;font-weight:600;color:#27272a;">${escapeHtml(b.name)}</p>
-              ${b.footer ? `<p style="margin:4px 0 0 0;font-size:12px;color:#71717a;line-height:1.4;">${escapeHtml(b.footer)}</p>` : ''}
-              <p style="margin:12px 0 0 0;font-size:10px;color:#a1a1aa;line-height:1.4;">
-                This quotation is an estimate subject to formal acceptance before the stated expiry date.
-              </p>
+              <p style="margin:0;font-size:12px;font-weight:700;color:#27272a;">${escapeHtml(b.name)}</p>
+              ${
+                businessAddressLines.length > 0
+                  ? `<p style="margin:4px 0 0 0;font-size:11px;color:#71717a;line-height:1.4;">${escapeHtml(
+                      businessAddressLines.join(' · ')
+                    )}</p>`
+                  : ''
+              }
+              ${b.footer ? `<p style="margin:6px 0 0 0;font-size:12px;color:#52525b;line-height:1.4;">${escapeHtml(b.footer)}</p>` : ''}
+              <div style="margin-top:16px;padding-top:12px;border-top:1px solid #e4e4e7;">
+                <p style="margin:0;font-size:10px;color:#a1a1aa;line-height:1.5;">
+                  You received this formal proposal because you requested a quotation from ${escapeHtml(b.name)}.${recipientEmail ? ` Sent to <span style="color:#71717a;">${escapeHtml(recipientEmail)}</span>.` : ''}
+                </p>
+                <p style="margin:6px 0 0 0;font-size:10px;color:#a1a1aa;line-height:1.4;">
+                  This quotation is an estimate subject to formal acceptance before the stated expiry date.
+                </p>
+              </div>
             </td>
           </tr>
 
@@ -1516,7 +1583,247 @@ export function renderQuoteEmailText(options: QuoteEmailTemplateOptions): string
 
   if (b.footer) {
     lines.push(b.footer)
+    lines.push('')
   }
+
+  const recipientEmail = m?.to || client.email || ''
+  lines.push('--------------------------------------------------')
+  lines.push(`Sender: ${b.name}`)
+  if (quoteBizAddress) lines.push(`Address: ${quoteBizAddress.replace(/\n/g, ', ')}`)
+  if (recipientEmail) lines.push(`Recipient: ${recipientEmail}`)
+  lines.push(`Notice: Formal quotation issued by ${b.name}. Valid until ${formatDisplayDate(q.expiryDate)}.`)
 
   return lines.join('\n')
 }
+
+export interface DiagnosticsTestEmailOptions {
+  recipient: string
+  scenario?: 'smoke' | 'invoice' | 'reminder' | 'magic-link'
+  appUrl?: string
+  senderFrom?: string
+  timestamp?: string
+  note?: string
+  environment?: string
+  businessName?: string
+}
+
+export function renderDiagnosticsTestEmailHtml(options: DiagnosticsTestEmailOptions): string {
+  const {
+    recipient,
+    scenario = 'smoke',
+    appUrl = 'https://invoiceui.humza.website',
+    senderFrom = 'Invoices <invoices@humza.website>',
+    timestamp = new Date().toISOString(),
+    note,
+    environment = 'Cloudflare Worker + Resend',
+    businessName = 'InvoiceUI Developer Tools',
+  } = options
+
+  const preheaderText = `InvoiceUI test email (${scenario}) sent to ${recipient}. Live deliverability verified.`
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>InvoiceUI Deliverability Test</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background-color: #f4f4f5;
+      color: #18181b;
+    }
+    .email-container {
+      max-width: 600px;
+      margin: 0 auto;
+      background-color: #ffffff;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.06);
+      border: 1px solid #e4e4e7;
+    }
+    @media only screen and (max-width: 600px) {
+      .email-container {
+        width: 100% !important;
+        border-radius: 0 !important;
+      }
+      .mobile-p-4 {
+        padding: 20px !important;
+      }
+    }
+  </style>
+</head>
+<body style="margin:0;padding:0;background-color:#f4f4f5;color:#18181b;">
+  ${renderPreheaderSnippet(preheaderText)}
+
+  <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color:#f4f4f5;padding:32px 12px;">
+    <tr>
+      <td align="center">
+        <!-- Main Card -->
+        <table role="presentation" cellpadding="0" cellspacing="0" width="100%" class="email-container" style="max-width:600px;margin:0 auto;background-color:#ffffff;border-radius:16px;border:1px solid #e4e4e7;overflow:hidden;">
+          <!-- Top Accent Bar -->
+          <tr>
+            <td style="height:6px;background-color:#10b981;"></td>
+          </tr>
+
+          <!-- Header -->
+          <tr>
+            <td style="padding:32px 32px 20px 32px;" class="mobile-p-4">
+              <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
+                <tr>
+                  <td>
+                    <div style="display:inline-block;padding:6px 12px;background-color:#ecfdf5;border:1px solid #a7f3d0;border-radius:20px;font-size:12px;font-weight:700;color:#047857;">
+                      ✓ Deliverability Verified
+                    </div>
+                    <h1 style="margin:16px 0 6px 0;font-size:22px;font-weight:800;color:#18181b;letter-spacing:-0.02em;">
+                      Email Delivery Smoke Test
+                    </h1>
+                    <p style="margin:0;font-size:14px;color:#71717a;line-height:1.5;">
+                      Testing live outbound email integration via Resend for <strong>${escapeHtml(businessName)}</strong>.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Diagnostic Data Table -->
+          <tr>
+            <td style="padding:0 32px 24px 32px;" class="mobile-p-4">
+              <div style="background-color:#fafafa;border:1px solid #e4e4e7;border-radius:12px;padding:20px;margin-bottom:20px;">
+                <p style="margin:0 0 14px 0;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#71717a;">
+                  Diagnostics Audit Log
+                </p>
+                <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="font-size:13px;color:#3f3f46;line-height:1.6;">
+                  <tr>
+                    <td style="padding:6px 0;color:#71717a;width:140px;font-weight:600;">Test Scenario</td>
+                    <td style="padding:6px 0;font-weight:700;color:#18181b;">${escapeHtml(scenario.toUpperCase())}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:6px 0;color:#71717a;font-weight:600;">Recipient</td>
+                    <td style="padding:6px 0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;">${escapeHtml(recipient)}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:6px 0;color:#71717a;font-weight:600;">Sending From</td>
+                    <td style="padding:6px 0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;">${escapeHtml(senderFrom)}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:6px 0;color:#71717a;font-weight:600;">Timestamp (UTC)</td>
+                    <td style="padding:6px 0;">${escapeHtml(timestamp)}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:6px 0;color:#71717a;font-weight:600;">Runtime Stack</td>
+                    <td style="padding:6px 0;">${escapeHtml(environment)}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:6px 0;color:#71717a;font-weight:600;">App Origin</td>
+                    <td style="padding:6px 0;"><a href="${appUrl}" style="color:#0284c7;text-decoration:none;">${escapeHtml(appUrl)}</a></td>
+                  </tr>
+                </table>
+              </div>
+
+              ${note ? `
+              <div style="background-color:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:16px;margin-bottom:20px;">
+                <p style="margin:0 0 6px 0;font-size:12px;font-weight:700;color:#1e40af;">Developer Custom Note:</p>
+                <p style="margin:0;font-size:13px;color:#1e3a8a;line-height:1.5;">${escapeHtml(note)}</p>
+              </div>` : ''}
+
+              <!-- Anti-Spam & Deliverability Checklist -->
+              <div style="border-top:1px solid #e4e4e7;padding-top:20px;">
+                <p style="margin:0 0 10px 0;font-size:12px;font-weight:700;color:#27272a;">
+                  Anti-Spam & Deliverability Standards Applied:
+                </p>
+                <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="font-size:12px;color:#52525b;line-height:1.6;">
+                  <tr>
+                    <td style="padding:3px 0;width:24px;vertical-align:top;color:#10b981;">✓</td>
+                    <td style="padding:3px 0;"><strong>Auto-Submitted Header:</strong> Marked as auto-generated transactional communication.</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:3px 0;width:24px;vertical-align:top;color:#10b981;">✓</td>
+                    <td style="padding:3px 0;"><strong>Vacation Loop Suppression:</strong> Configured for Microsoft Exchange / Office 365.</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:3px 0;width:24px;vertical-align:top;color:#10b981;">✓</td>
+                    <td style="padding:3px 0;"><strong>Hidden Preheader:</strong> Zero-width whitespace padding prevents CSS alt text leaks.</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:3px 0;width:24px;vertical-align:top;color:#10b981;">✓</td>
+                    <td style="padding:3px 0;"><strong>Multipart Parity:</strong> Synchronized plaintext counterpart matches HTML body.</td>
+                  </tr>
+                </table>
+              </div>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="background-color:#fafafa;border-top:1px solid #e4e4e7;padding:24px 32px;text-align:center;" class="mobile-p-4">
+              <p style="margin:0;font-size:11px;font-weight:700;color:#27272a;">
+                ${escapeHtml(businessName)} · Deliverability Test
+              </p>
+              <p style="margin:4px 0 0 0;font-size:10px;color:#71717a;line-height:1.4;">
+                Delivered securely via Resend · Cloudflare Worker Environment
+              </p>
+              <div style="margin-top:12px;padding-top:10px;border-top:1px solid #e4e4e7;">
+                <p style="margin:0;font-size:10px;color:#a1a1aa;line-height:1.5;">
+                  This is an automated developer test email sent to <span style="color:#71717a;">${escapeHtml(recipient)}</span> to verify deliverability configuration. No further action is required.
+                </p>
+              </div>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`
+}
+
+export function renderDiagnosticsTestEmailText(options: DiagnosticsTestEmailOptions): string {
+  const {
+    recipient,
+    scenario = 'smoke',
+    appUrl = 'https://invoiceui.humza.website',
+    senderFrom = 'Invoices <invoices@humza.website>',
+    timestamp = new Date().toISOString(),
+    note,
+    environment = 'Cloudflare Worker + Resend',
+    businessName = 'InvoiceUI Developer Tools',
+  } = options
+
+  const lines: string[] = []
+  lines.push('==================================================')
+  lines.push('INVOICEUI EMAIL DELIVERABILITY SMOKE TEST')
+  lines.push('==================================================')
+  lines.push('')
+  lines.push(`Testing live outbound email integration via Resend for ${businessName}.`)
+  lines.push('')
+  lines.push('DIAGNOSTICS AUDIT LOG:')
+  lines.push(`- Scenario: ${scenario.toUpperCase()}`)
+  lines.push(`- Recipient: ${recipient}`)
+  lines.push(`- Sender: ${senderFrom}`)
+  lines.push(`- Timestamp: ${timestamp}`)
+  lines.push(`- Runtime: ${environment}`)
+  lines.push(`- App URL: ${appUrl}`)
+  lines.push('')
+
+  if (note) {
+    lines.push('DEVELOPER CUSTOM NOTE:')
+    lines.push(note)
+    lines.push('')
+  }
+
+  lines.push('ANTI-SPAM & DELIVERABILITY CHECKS:')
+  lines.push('- Auto-Submitted: auto-generated')
+  lines.push('- X-Auto-Response-Suppress: OOF, AutoReply')
+  lines.push('- Multipart/Alternative parity verified')
+  lines.push('')
+  lines.push('--------------------------------------------------')
+  lines.push(`Sent to: ${recipient}`)
+  lines.push('Notice: Automated developer test email verifying outbound delivery.')
+
+  return lines.join('\n')
+}
+
