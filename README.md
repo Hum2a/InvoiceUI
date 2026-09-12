@@ -76,11 +76,17 @@ Apply migrations:
 npm run db:migrate
 ```
 
-Run the API and UI in two terminals:
+Run both frontend and backend concurrently in the same terminal:
 
 ```bash
+npm run dev        # Runs client (Vite on 127.0.0.1:5173) and api (Wrangler on 127.0.0.1:8787)
+```
+
+Or run them individually if preferred:
+
+```bash
+npm run dev:client # Vite on 127.0.0.1:5173, proxies /api
 npm run dev:api    # Wrangler on 127.0.0.1:8787
-npm run dev        # Vite on 127.0.0.1:5173, proxies /api
 ```
 
 Open [http://127.0.0.1:5173](http://127.0.0.1:5173). Magic-link sign-in only succeeds for the configured owner email.
@@ -89,7 +95,8 @@ Open [http://127.0.0.1:5173](http://127.0.0.1:5173). Magic-link sign-in only suc
 
 | Command | Purpose |
 | --- | --- |
-| `npm run dev` | Vite UI with `/api` proxy |
+| `npm run dev` | Run frontend and backend together concurrently |
+| `npm run dev:client` | Vite UI with `/api` proxy |
 | `npm run dev:api` | Worker locally |
 | `npm run check` | Typecheck |
 | `npm test` | Vitest (no live database required) |

@@ -13,6 +13,6 @@ for(const m of backup.data.messages)if(['queued','sending'].includes(m.status))m
 const sql=neon(process.env.DATABASE_URL)
 const [user]=await sql`SELECT id FROM auth_user WHERE lower(email)=${ownerEmail.toLowerCase()}`
 if(!user)throw new Error('Sign in once as the target owner before restoring')
-const result=await sql`INSERT INTO invoice_workspaces(owner_id,data) VALUES(${user.id},${JSON.stringify(backup.data)}::jsonb) ON CONFLICT (owner_id) DO UPDATE SET data=excluded.data,version=invoice_workspaces.version+1 WHERE invoice_workspaces.data->'invoices'='[]'::jsonb AND invoice_workspaces.data->'clients'='[]'::jsonb AND invoice_workspaces.data->'services'='[]'::jsonb AND invoice_workspaces.data->'projects'='[]'::jsonb RETURNING version`
+const [_, __, result]=await sql.transaction([sql`SET LOCAL ROLE invoiceui_app`,sql`SELECT set_config('app.service_role', 'worker', true)`,sql`INSERT INTO invoice_workspaces(owner_id,data) VALUES(${user.id},${JSON.stringify(backup.data)}::jsonb) ON CONFLICT (owner_id) DO UPDATE SET data=excluded.data,version=invoice_workspaces.version+1 WHERE invoice_workspaces.data->'invoices'='[]'::jsonb AND invoice_workspaces.data->'clients'='[]'::jsonb AND invoice_workspaces.data->'services'='[]'::jsonb AND invoice_workspaces.data->'projects'='[]'::jsonb RETURNING version`])
 if(!result.length)throw new Error('Restore refused: target workspace is not empty')
 console.log('Backup restored. Links revoked, automation paused. Keep the PDF archive from your backup.')

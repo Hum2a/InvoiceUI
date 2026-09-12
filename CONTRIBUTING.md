@@ -8,7 +8,7 @@ InvoiceUI is a private product. Changes should stay aligned with [IMPLEMENTATION
 2. `npm install`
 3. Copy `.dev.vars.example` to `.dev.vars` and fill secrets. Never commit `.dev.vars`, `.env` or `.env.local`.
 4. `npm run db:migrate`
-5. `npm run dev:api` and `npm run dev` (see [README.md](README.md)).
+5. `npm run dev` (or run `npm run dev:api` and `npm run dev:client` separately; see [README.md](README.md)).
 
 Use synthetic clients and invoices. Do not import real historical invoice folders.
 

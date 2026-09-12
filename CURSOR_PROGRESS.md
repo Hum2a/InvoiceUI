@@ -657,10 +657,93 @@ Update client directory records and invoice forms to support enriched billing fi
 5. **Verification**:
    - `npm test`: **144/144 tests passed** across 16 test suites.
    - `npm run check`: TypeScript typecheck passed with 0 errors (`tsc -b`).
+---
+
+## Milestone: Spectacular HTML Email Templates & Live Preview
+
+### Objectives Completed
+1. **Embedded HTML Invoice Template Engine (`src/shared/emailTemplate.ts`)**:
+   - Developed responsive, table-based HTML email templates with inline styling and cross-client compatibility (Gmail, Apple Mail, Outlook, iOS, Android).
+   - Embedded the full invoice structure directly into the email body: top brand accent band (`invoice.accent || business.accent || '#863bff'`), business logo/branding, invoice number, issue/due dates, and dynamic status badges (`Paid`, `Payment Due`, or `Issued`).
+   - Integrated sender and recipient parties (From and Billed To) with structured address formatting, contacts, emails, and tax/VAT numbers.
+   - Formatted itemized deliverables table with line descriptions, group labels, quantities, unit tags, rates, and totals.
+   - Rendered financial totals card: subtotal, discount, tax, payments applied, and prominent Balance Due highlight box.
+   - Dedicated Bank & Settlement Instructions card with account details and payment reference reminder.
+   - Deliverables showcase: official invoice PDF, breakdown PDF, and client-visible attachments with file sizes (private internal attachments safely excluded).
+2. **Cool Standalone Features**:
+   - One-Click Action Center: primary CTA linking to secure public token URL (`View & Download PDF Invoice`).
+   - Google Calendar Due Date Reminder: pre-filled Google Calendar event template link (`📅 Add Due Date to Calendar`) so clients can add payment deadlines directly to their calendar with a single click.
+   - Dynamic Payment Reminder Alert Mode: amber reminder alert banner with bell icon, due date, and balance due when message kind is `reminder`.
+   - Multi-Theme Support: template styling dynamically inherits invoice style (`studio`, `minimal`, `classic`).
+   - Structured plain-text fallback generator (`renderInvoiceEmailText`).
+3. **In-App Interactive Live Preview (`src/client/components/InvoiceActions.tsx`)**:
+   - Added dual-mode tab switcher in email action modal: "Compose details" and "Spectacular HTML preview".
+   - Added Desktop (620px) vs Mobile (375px) responsive viewport switcher.
+   - Isolated sandboxed live preview rendering the exact generated HTML email in real time.
+   - Added "Copy HTML" button with animated checkmark feedback for easy copying to external mail clients.
+4. **Worker Delivery Pipeline Integration (`src/worker/delivery.ts`)**:
+   - Updated Resend delivery to generate and pass both `html` and `text` alternatives.
+5. **Verification & Test Coverage (`tests/email-templates.test.ts`)**:
+   - Authored comprehensive test suite (6 tests) covering HTML structure, line items, totals, bank details, calendar links, CTAs, attachments filtering, reminder mode, template variants, XSS escaping, text fallback, and dash compliance.
+   - Total test suite: **17 test files, 150/150 tests passing**.
+   - TypeScript compilation: 0 errors (`tsc -b`).
    - Strict punctuation verification: 0 em dashes (`\u2014`) and 0 en dashes (`\u2013`).
 
+## Wave E: PostgreSQL Row Level Security (RLS) & Local Development Origin Support
 
+1. **Strict PostgreSQL Row Level Security (RLS) (`migrations/0002_row_level_security.sql`, `migrations/0003_app_role_rls.sql`)**:
+   - Applied `ALTER TABLE invoice_workspaces ENABLE ROW LEVEL SECURITY` and `FORCE ROW LEVEL SECURITY`.
+   - Created tenant isolation policy `invoice_workspaces_tenant_isolation` enforcing `owner_id = NULLIF(current_setting('app.current_user_id', true), '') OR current_setting('app.service_role', true) = 'worker'`.
+   - Created unprivileged PostgreSQL role `invoiceui_app` with `NOBYPASSRLS` and granted table privileges and role membership to the primary connection user.
+   - Enforced service-only RLS on `invoice_webhook_events`.
+   - Protected Better Auth tables (`auth_user`, `auth_session`, `auth_account`, `auth_verification`, `auth_rate_limit`) with explicit application policies.
+2. **Worker Database Context Propagation (`src/worker/store.ts`, `src/worker/index.ts`, `src/worker/delivery.ts`, `scripts/restore.mjs`)**:
+   - Wrapped private workspace `read` and `write` queries in `sql.transaction` executing `SET LOCAL ROLE invoiceui_app` and `SELECT set_config('app.current_user_id', owner, true)` to pass authenticated caller context to PostgreSQL RLS.
+   - Configured public share, portal, webhook, and cron queries to execute under `SET LOCAL ROLE invoiceui_app` with `app.service_role = 'worker'`.
+   - Updated `scripts/restore.mjs` to execute its transactional restore under the authorized application service role.
+3. **Local Development Origin & Dev Server Support (`src/worker/index.ts`, `src/worker/auth.ts`)**:
+   - Resolved 403 Forbidden errors when accessing the API from Vite dev server (`http://127.0.0.1:5173` and `http://localhost:5173`).
+   - Extended trusted origin validation to permit local development origins (`http://127.0.0.1:5173`, `http://localhost:5173`, `http://127.0.0.1:8787`, `http://localhost:8787`) alongside `env.APP_URL`.
+   - Configured Better Auth with dynamic `baseURL` resolution and `trustedOrigins` matching request origin in development so magic links and session cookies work seamlessly in local dev.
+4. **Verification & Test Coverage (`tests/waveE-rls-security.test.ts`)**:
+   - Authored test suite verifying origin validation, untrusted origin rejection (403), local dev origin acceptance (401/200), dynamic Better Auth baseURL configuration, and RLS migration constraints.
+   - Full test suite: **18 test files, 153/153 tests passing**.
+   - TypeScript compilation: 0 errors (`npm run check`).
+   - Agent config sync check: clean (`npm run sync:agents:check`).
 
+## Wave F: Custom Email Templates for Magic Links, Quotes, and System Delivery
+
+1. **Spectacular Magic Link Authentication Email (`src/shared/emailTemplate.ts`)**:
+   - Authored `renderMagicLinkEmailHtml` and `renderMagicLinkEmailText` featuring the dark brand mark badge (`▤`), clear headline and subtext, high-contrast primary CTA button with hover feedback, single-use 10-minute expiry callout with security notice, and monospace fallback URL card for restrictive email clients.
+   - Integrated directly into Better Auth's `sendMagicLink` plugin in `src/worker/auth.ts` to dispatch both rich HTML and structured plain-text alternatives via Resend.
+2. **Formal Quotation Email Templates (`src/shared/emailTemplate.ts`)**:
+   - Authored `renderQuoteEmailHtml` and `renderQuoteEmailText` embedding formal proposal details: quote number, revision tracking, validity expiry date, client & provider address details, project scope of work, line item pricing breakdown, totals block (subtotal, discounts, tax, total quote), and Google Calendar expiry reminder links.
+3. **React Hook Order Stabilization (`src/client/App.tsx`)**:
+   - Resolved Minified React Error #310 by moving top-level `overviewReport` `useMemo` above conditional early returns (`viewingPortalToken`, `store.loading`, `!w`), utilizing `emptyWorkspace()` as a graceful fallback during authentication and initialization states.
+4. **Verification & Test Coverage (`tests/email-templates.test.ts`)**:
+   - Expanded test suite to 8 comprehensive tests covering invoice emails, overdue payment reminders, magic link emails, formal quotations, XSS escaping, plaintext fallbacks, and zero em/en dash validation.
+   - Full test suite: **18 test files, 155/155 tests passing**.
+   - TypeScript typecheck: 0 errors (`npm run check`).
+   - Production bundle build: successful (`npm run build`).
+   - Punctuation compliance: 0 em dashes (`\u2014`) and 0 en dashes (`\u2013`) across all modified code and templates.
+
+## Wave G: Resolving 401 Unauthorized & Session Cookie Normalization
+
+1. **Root Cause Analysis of 401 on Record Save (`POST /api/private/command`)**:
+   - Better Auth cookie prefix isolation: When Better Auth is initialized with an HTTPS `baseURL` (e.g. `APP_URL`), it sets and expects `__Secure-better-auth.session_token`. In local dev over plain HTTP (`http://127.0.0.1:5173`), browsers drop or reject `__Secure-` cookies and send plain `better-auth.session_token`. If request headers or origin detection drifted to the HTTPS default, `getSession` looked strictly for the `__Secure-` cookie, resulting in `null` and triggering 401 Unauthorized ("Sign in to continue").
+   - Demo mode command isolation: In `useWorkspace`, `demo` state was held in React state without ref synchronization or auto-recovery. Stale closures could cause `command()` to route to the private API instead of browser `localStorage`.
+2. **Robust Origin Resolution & Cookie Normalization (`src/worker/index.ts`)**:
+   - Implemented `resolveOrigin(c)` to accurately detect local dev hosts (`127.0.0.1:5173`, `localhost:5173`, `127.0.0.1:8787`, `localhost:8787`) across both `Origin` and `Host` headers on both GET and POST requests.
+   - Implemented `normalizeAuthHeaders(headers)` in the worker middleware: automatically bridges `better-auth.session_token` and `__Secure-better-auth.session_token` so that Better Auth reliably validates active sessions regardless of origin scheme transitions.
+3. **Workspace Demo Mode Resilience & Dev Auto-Recovery (`src/client/workspace.ts`)**:
+   - Added `isDemoRef` and updated `command()` to check `demo || isDemoRef.current || owner === 'demo'`, ensuring local preview operations always save to `localStorage` under `DEMO_KEY` and never leak network requests to `/api/private/command`.
+   - Added auto-recovery on reload in dev mode: if unauthenticated (401) and `invoiceui:is_demo` is active, seamlessly restores the demo workspace from `DEMO_KEY` rather than booting the user to the login screen.
+   - Clean sign-out resets `isDemoRef`, clearing both session state and demo flags.
+4. **Verification & Test Coverage**:
+   - Live integration check: verified `GET /api/private/workspace` and `POST /api/private/command` directly against Vite proxy on `127.0.0.1:5173` using plain session cookie; returned 200 OK and successfully committed version updates to PostgreSQL database.
+   - Full test suite: **18 test files, 155/155 tests passing** (`npm test`).
+   - TypeScript compilation: 0 errors (`npm run check`).
+   - Punctuation compliance: 0 em dashes (`\u2014`) and 0 en dashes (`\u2013`).
 
 
 
