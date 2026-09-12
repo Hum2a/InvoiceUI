@@ -68,6 +68,15 @@ Follow these rules for this project. Read relevant detailed topics below only wh
 - Respect reduced motion accessibility unconditionally: honor `@media (prefers-reduced-motion: reduce)` and Motion's `<MotionConfig reducedMotion="user">`.
 - Animated decoration must never leak into printed or generated PDF documents. Enforce clean document layouts under `@media print` and inside PDF generation pipelines.
 
+
+# No browser alerts: only UI modals
+
+- HARD USER REQUIREMENT: never use browser-native `alert()`, `confirm()`, or `prompt()` anywhere in the codebase.
+- All user alerts, confirmations, notices, and destructive action prompts must be presented using proper UI-created modals built with shadcn/ui and Radix Dialog primitives (via the project `useConfirm` hook or `Modal` components).
+- Confirmation modals must provide a clear, descriptive title, contextual body explanation, and distinct action buttons (e.g. secondary "Cancel" and danger or primary confirmation).
+- Every modal must adhere to the design system: backdrop blur, spring scale transitions, tactile button press feedback (`scale(0.98)` on active), accessible keyboard focus traps, and Escape key dismissal.
+- Alert and notice messages must feel integrated with the application rather than interrupting the user with native browser popups.
+
 ## Topic index (paths relative to project root)
 
 - .ai/rules/00-project-contract.md - Project scope and precedence
@@ -84,3 +93,4 @@ Follow these rules for this project. Read relevant detailed topics below only wh
 - .ai/rules/11-rule-maintenance.md - Shared rules ignore policy and maintenance
 - .ai/rules/12-punctuation.md - Never use em dashes
 - .ai/rules/13-fluid-motion-interactions.md - Fluid motion, tactile feedback, and interactive animations
+- .ai/rules/14-no-alerts-only-modals.md - No browser alerts: only UI modals

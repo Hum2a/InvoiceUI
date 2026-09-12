@@ -3,6 +3,8 @@ import {
   totals,
   quoteTotals,
   formatClientAddressLines,
+  formatAddressLines,
+  formatAddress,
   type Invoice,
   type Business,
   type Message,
@@ -32,8 +34,52 @@ export interface MagicLinkEmailOptions {
 export interface QuoteEmailTemplateOptions {
   quote: Quote
   business: Business
-  message?: { subject?: string; body?: string }
+  message?: { subject?: string; body?: string; to?: string }
   publicUrl?: string
+}
+
+export interface DeliverabilityHeaderOptions {
+  messageId?: string
+  ownerId?: string
+  kind?: 'invoice' | 'reminder' | 'magic-link' | 'quote'
+  invoiceNumber?: string
+  unsubscribeEmail?: string
+}
+
+export function formatSenderFrom(displayName: string, sendingEmail: string): string {
+  if (!sendingEmail) return displayName || 'InvoiceUI'
+  const match = sendingEmail.match(/<([^>]+)>/)
+  const cleanEmail = (match ? match[1] : sendingEmail).trim()
+  const cleanName = displayName.replace(/["\r\n]/g, '').trim()
+  if (!cleanName) return cleanEmail
+  return `"${cleanName}" <${cleanEmail}>`
+}
+
+export function getDeliverabilityHeaders(options: DeliverabilityHeaderOptions = {}): Record<string, string> {
+  const headers: Record<string, string> = {
+    'Auto-Submitted': 'auto-generated',
+    'X-Auto-Response-Suppress': 'OOF, AutoReply',
+  }
+  if (options.ownerId && options.messageId) {
+    headers['X-Entity-Ref-ID'] = `invoiceui/${options.ownerId}/${options.messageId}`
+  }
+  if (options.kind === 'reminder' && options.unsubscribeEmail) {
+    const inv = options.invoiceNumber ? ` ${encodeURIComponent(options.invoiceNumber)}` : ''
+    headers['List-Unsubscribe'] = `<mailto:${options.unsubscribeEmail}?subject=Unsubscribe%20Invoice%20Reminders${inv}>`
+    headers['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click'
+  }
+  return headers
+}
+
+function renderPreheaderSnippet(snippet: string): string {
+  const padding = '&#847;&zwnj;&nbsp;'.repeat(30)
+  return `<!-- Hidden Anti-Spam Inbox Preview Snippet -->
+  <div style="display:none;font-size:1px;color:#ffffff;line-height:1px;max-height:0px;max-width:0px;opacity:0;overflow:hidden;mso-hide:all;">
+    ${escapeHtml(snippet)}
+  </div>
+  <div style="display:none;max-height:0px;overflow:hidden;mso-hide:all;">
+    ${padding}
+  </div>`
 }
 
 function escapeHtml(str: string): string {
@@ -119,11 +165,15 @@ export function renderInvoiceEmailHtml(options: EmailTemplateOptions): string {
   const hasTax = Number(t.tax) > 0
   const calendarUrl = buildGoogleCalendarUrl(i, b, t.balance)
   const clientAddressLines = formatClientAddressLines(client)
-  const businessAddressLines = b.address ? b.address.split('\n').map((l) => l.trim()).filter(Boolean) : []
+  const businessAddressLines = formatAddressLines(b)
   const clientVisibleAttachments: Attachment[] = (i.attachments || []).filter((a) => a.visibility === 'client')
 
   // Personal message note filtering
   const customMessageBody = m?.body?.trim() || ''
+  const recipientEmail = ('to' in (m || {}) && (m as { to?: string }).to) || client.email || ''
+  const preheaderText = isReminder
+    ? `Payment reminder: Invoice ${i.number || 'Draft'} from ${b.name} has an outstanding balance of ${formattedBalance}.`
+    : `${b.name}: Invoice ${i.number || 'Draft'} for ${formattedTotal} is ready for review. Balance due: ${formattedBalance} by ${formatDisplayDate(i.dueDate)}.`
 
   // Font choices based on template
   const fontFamily =
@@ -136,10 +186,21 @@ export function renderInvoiceEmailHtml(options: EmailTemplateOptions): string {
   return `<!DOCTYPE html>
 <html lang="en" xmlns="http://www.w3.org/1999/xhtml">
 <head>
-  <meta charset="utf-8" />
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
   <meta name="color-scheme" content="light dark" />
+  <meta name="format-detection" content="telephone=no, date=no, address=no, email=no" />
+  <meta name="x-apple-disable-message-reformatting" />
+  <!--[if mso]>
+  <noscript>
+    <xml>
+      <o:OfficeDocumentSettings>
+        <o:PixelsPerInch>96</o:PixelsPerInch>
+      </o:OfficeDocumentSettings>
+    </xml>
+  </noscript>
+  <![endif]-->
   <title>${escapeHtml(m?.subject || `Invoice ${i.number || 'Draft'} from ${b.name}`)}</title>
   <style>
     body {
@@ -196,6 +257,7 @@ export function renderInvoiceEmailHtml(options: EmailTemplateOptions): string {
   </style>
 </head>
 <body style="margin:0;padding:0;background-color:#f4f4f5;color:#18181b;">
+  ${renderPreheaderSnippet(preheaderText)}
   <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color:#f4f4f5;padding:32px 12px;">
     <tr>
       <td align="center">
@@ -675,22 +737,50 @@ export function renderInvoiceEmailHtml(options: EmailTemplateOptions): string {
             </td>
           </tr>
 
-          <!-- Footer -->
+          <!-- Deliverability & Legal Compliance Footer -->
           <tr>
             <td style="background-color:#fafafa;border-top:1px solid #e4e4e7;padding:24px 28px;text-align:center;">
-              <p style="margin:0;font-size:12px;font-weight:600;color:#27272a;">
+              <p style="margin:0;font-size:12px;font-weight:700;color:#27272a;">
                 ${escapeHtml(b.name)}
               </p>
               ${
+                businessAddressLines.length > 0
+                  ? `<p style="margin:4px 0 0 0;font-size:11px;color:#71717a;line-height:1.4;">${escapeHtml(
+                      businessAddressLines.join(' · ')
+                    )}</p>`
+                  : ''
+              }
+              ${
                 b.footer
-                  ? `<p style="margin:4px 0 0 0;font-size:12px;color:#71717a;line-height:1.4;">${escapeHtml(
+                  ? `<p style="margin:6px 0 0 0;font-size:12px;color:#52525b;line-height:1.4;">${escapeHtml(
                       b.footer
                     )}</p>`
                   : ''
               }
-              <p style="margin:12px 0 0 0;font-size:10px;color:#a1a1aa;line-height:1.4;">
-                This email and any files transmitted with it are confidential and intended solely for the recipient. If you have received this message in error, please notify the sender immediately.
-              </p>
+              <div style="margin-top:16px;padding-top:12px;border-top:1px solid #e4e4e7;">
+                <p style="margin:0;font-size:10px;color:#a1a1aa;line-height:1.5;">
+                  ${
+                    isReminder
+                      ? `You received this automated payment reminder because invoice ${escapeHtml(
+                          i.number || ''
+                        )} remains unpaid with ${escapeHtml(b.name)}.`
+                      : `You received this transactional invoice because you have an active account or service agreement with ${escapeHtml(
+                          b.name
+                        )}.`
+                  }
+                  ${recipientEmail ? ` Sent to <span style="color:#71717a;">${escapeHtml(recipientEmail)}</span>.` : ''}
+                </p>
+                ${
+                  isReminder
+                    ? `<p style="margin:4px 0 0 0;font-size:10px;color:#a1a1aa;line-height:1.5;">
+                  To pause reminders or discuss payment options, reply directly to this email${b.email ? ` or contact <a href="mailto:${escapeHtml(b.email)}" style="color:#71717a;text-decoration:underline;">${escapeHtml(b.email)}</a>` : ''}.
+                </p>`
+                    : ''
+                }
+                <p style="margin:6px 0 0 0;font-size:10px;color:#a1a1aa;line-height:1.4;">
+                  This email is a confidential commercial communication intended solely for the recipient.
+                </p>
+              </div>
             </td>
           </tr>
 
@@ -743,7 +833,8 @@ export function renderInvoiceEmailText(options: EmailTemplateOptions): string {
   lines.push(`FROM:`)
   lines.push(b.name)
   if (b.email) lines.push(b.email)
-  if (b.address) lines.push(b.address)
+  const bizAddress = formatAddress(b)
+  if (bizAddress) lines.push(bizAddress)
   if (b.taxId) lines.push(`Tax ID: ${b.taxId}`)
   lines.push('')
 
@@ -792,6 +883,18 @@ export function renderInvoiceEmailText(options: EmailTemplateOptions): string {
 
   if (b.footer) {
     lines.push(b.footer)
+    lines.push('')
+  }
+
+  const recipientEmail = ('to' in (m || {}) && (m as { to?: string }).to) || client.email || ''
+  lines.push('--------------------------------------------------')
+  lines.push(`Sender: ${b.name}`)
+  if (bizAddress) lines.push(`Address: ${bizAddress.replace(/\n/g, ', ')}`)
+  if (recipientEmail) lines.push(`Recipient: ${recipientEmail}`)
+  if (isReminder) {
+    lines.push(`Notice: Automated payment reminder for invoice ${i.number || 'Draft'}. Reply to this email to pause reminders or discuss settlement.`)
+  } else {
+    lines.push(`Notice: Transactional invoice issued by ${b.name}.`)
   }
 
   return lines.join('\n')
@@ -804,14 +907,26 @@ export function renderInvoiceEmailText(options: EmailTemplateOptions): string {
 export function renderMagicLinkEmailHtml(options: MagicLinkEmailOptions): string {
   const { email, url, expiresInMinutes = 10 } = options
   const accent = '#863bff' // Sleek InvoiceUI brand violet
+  const preheaderText = `Your single-use sign-in link for InvoiceUI. Expires in ${expiresInMinutes} minutes.`
 
   return `<!DOCTYPE html>
 <html lang="en" xmlns="http://www.w3.org/1999/xhtml">
 <head>
-  <meta charset="utf-8" />
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
   <meta name="color-scheme" content="light dark" />
+  <meta name="format-detection" content="telephone=no, date=no, address=no, email=no" />
+  <meta name="x-apple-disable-message-reformatting" />
+  <!--[if mso]>
+  <noscript>
+    <xml>
+      <o:OfficeDocumentSettings>
+        <o:PixelsPerInch>96</o:PixelsPerInch>
+      </o:OfficeDocumentSettings>
+    </xml>
+  </noscript>
+  <![endif]-->
   <title>Sign in to InvoiceUI</title>
   <style>
     body {
@@ -846,6 +961,7 @@ export function renderMagicLinkEmailHtml(options: MagicLinkEmailOptions): string
   </style>
 </head>
 <body style="margin:0;padding:0;background-color:#f4f4f5;color:#18181b;">
+  ${renderPreheaderSnippet(preheaderText)}
   <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color:#f4f4f5;padding:40px 12px;">
     <tr>
       <td align="center">
@@ -930,15 +1046,20 @@ export function renderMagicLinkEmailHtml(options: MagicLinkEmailOptions): string
             </td>
           </tr>
 
-          <!-- Footer -->
+          <!-- Deliverability & Security Notice Footer -->
           <tr>
             <td style="background-color:#fafafa;border-top:1px solid #e4e4e7;padding:20px 32px;text-align:center;">
-              <p style="margin:0;font-size:11px;font-weight:600;color:#3f3f46;">
+              <p style="margin:0;font-size:11px;font-weight:700;color:#27272a;">
                 InvoiceUI · Private Workspace
               </p>
-              <p style="margin:4px 0 0 0;font-size:10px;color:#a1a1aa;line-height:1.4;">
+              <p style="margin:4px 0 0 0;font-size:10px;color:#71717a;line-height:1.4;">
                 Delivered securely via Resend · Passwordless owner authentication
               </p>
+              <div style="margin-top:12px;padding-top:10px;border-top:1px solid #e4e4e7;">
+                <p style="margin:0;font-size:10px;color:#a1a1aa;line-height:1.5;">
+                  You received this security link because sign-in was requested for <span style="color:#71717a;">${escapeHtml(email)}</span>. If you did not make this request, no action is needed and your account remains secure.
+                </p>
+              </div>
             </td>
           </tr>
 
@@ -976,6 +1097,7 @@ export function renderMagicLinkEmailText(options: MagicLinkEmailOptions): string
     '',
     '--------------------------------------------------',
     'InvoiceUI - Private Invoice Workspace',
+    `Notice: Single-use authentication link sent to ${email}. If you did not request this, no action is needed.`,
   ].join('\n')
 }
 
@@ -998,7 +1120,7 @@ export function renderQuoteEmailHtml(options: QuoteEmailTemplateOptions): string
   const hasTax = Number(t.tax) > 0
   const calendarUrl = buildQuoteCalendarUrl(q, b)
   const clientAddressLines = formatClientAddressLines(client)
-  const businessAddressLines = b.address ? b.address.split('\n').map((l) => l.trim()).filter(Boolean) : []
+  const businessAddressLines = formatAddressLines(b)
   const customMessage = m?.body?.trim() || ''
 
   return `<!DOCTYPE html>
@@ -1357,7 +1479,8 @@ export function renderQuoteEmailText(options: QuoteEmailTemplateOptions): string
   lines.push(`PREPARED BY:`)
   lines.push(b.name)
   if (b.email) lines.push(b.email)
-  if (b.address) lines.push(b.address)
+  const quoteBizAddress = formatAddress(b)
+  if (quoteBizAddress) lines.push(quoteBizAddress)
   lines.push('')
 
   lines.push(`PREPARED FOR:`)

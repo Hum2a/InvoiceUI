@@ -545,7 +545,7 @@ Implement EXPANDED_PRODUCT_SPEC.md D01:
 
 ---
 
-## 2026-09-12: Wave D (D02, D03, D04) - Mobile Experience, Client Portal, Multiple Business Profiles
+## 2026-09-12 - Wave D (D02, D03, D04) - Mobile Experience, Client Portal, Multiple Business Profiles
 
 ### Scope
 Implement the remaining Wave D modules from EXPANDED_PRODUCT_SPEC.md:
@@ -743,6 +743,74 @@ Update client directory records and invoice forms to support enriched billing fi
    - Live integration check: verified `GET /api/private/workspace` and `POST /api/private/command` directly against Vite proxy on `127.0.0.1:5173` using plain session cookie; returned 200 OK and successfully committed version updates to PostgreSQL database.
    - Full test suite: **18 test files, 155/155 tests passing** (`npm test`).
    - TypeScript compilation: 0 errors (`npm run check`).
+   - Punctuation compliance: 0 em dashes (`\u2014`) and 0 en dashes (`\u2013`).
+
+## Wave H: Replacing Browser Alerts with UI Modals & Establishing Rule 14
+
+1. **Accessible UI Modal Confirmation System (`src/client/components/ConfirmModal.tsx`, `src/client/components/ui.tsx`)**:
+   - Implemented `ConfirmProvider` and `useConfirm()` hook delivering asynchronous `await confirm(options)` and `await alert(options)`.
+   - Exported standalone `<ConfirmModal />` component for declarative implementations.
+   - Built on Radix UI Dialog primitives (`@radix-ui/react-dialog`) and shadcn styling, featuring backdrop blur (`confirm-modal-overlay` with `z-index: 70`), spring scale entrance animations, keyboard focus trapping, Escape key dismissal, and tactile button depression (`scale(0.98)`).
+   - Incorporated animated Lucide icons (`Trash2`, `Check`, `X`) from Animate UI.
+2. **Replaced All Native Browser Dialog Callsites (17 callsites across 6 files)**:
+   - `src/client/App.tsx`: Wrapped root application in `ConfirmProvider`; replaced profile switch confirmation with UI modal.
+   - `src/client/components/Editor.tsx`: Replaced draft deletion confirm with UI modal.
+   - `src/client/components/Quotes.tsx`: Replaced quote deletion confirm with UI modal.
+   - `src/client/components/ClientPortalModal.tsx`: Replaced portal access revocation confirm with UI modal.
+   - `src/client/components/InvoiceActions.tsx`: Replaced payment reversal and recurring schedule deletion confirms with UI modals.
+   - `src/client/components/Records.tsx`: Replaced all 12 client, project, milestone, work entry, starter bundle, and service deletion/reversal confirms with UI modals.
+7. **Established Project Rule 14 (`.cursor/rules/14-no-alerts-only-modals.mdc`)**:
+   - Created rule mandating proper UI modals and strictly prohibiting native browser `alert()`, `confirm()`, and `prompt()`.
+   - Propagated across all 215 agent configuration files via `npm run sync:agents`.
+   - Verified zero drift with `npm run sync:agents:check`.
+8. **Verification & Checks**:
+   - Full test suite: **19 test files, 161/161 tests passing** (`npm test`).
+   - TypeScript compilation: 0 errors (`npm run check`).
+   - Production bundle build: successful (`npm run build`).
+   - Punctuation compliance: 0 em dashes (`\u2014`) and 0 en dashes (`\u2013`).
+
+## Wave I: Structured Bank Instructions with Sort Code, Account Number & Bank Logo Resolution
+
+1. **Bank Catalog & Formatters (`src/shared/banks.ts`)**:
+   - Curated comprehensive directory of UK banks (Monzo, Starling, Revolut, Barclays, HSBC, Lloyds, NatWest, Santander, Chase UK, Nationwide, Halifax, RBS, TSB, Metro Bank, Co-op, First Direct, Bank of Scotland, Virgin Money, Clydesdale, Wise, Tide, Coutts, Triodos) and international institutions.
+   - Built sort code auto-formatting (`formatSortCode`), account number cleaning (`formatAccountNumber`), human-readable instruction generation (`formatBankInstructions`), and reverse parser (`parseExistingBankString`) to seamlessly extract structured fields from legacy free-form text.
+2. **Domain Schema Extension (`src/shared/domain.ts`)**:
+   - Extended `businessSchema` with optional `bankName`, `bankId`, `accountName`, `accountNumber`, `sortCode`, `iban`, `bic`, and `bankLogo` fields while preserving `b.bank` for full backward compatibility across database storage, PDF generation, email templates, and client portal views.
+3. **Tactile Bank Logo Component (`src/client/components/ui/BankLogo.tsx`)**:
+   - Integrated `@icons-pack/react-simple-icons` for instant, zero-latency vector rendering of supported brands (Monzo, Barclays, HSBC, Starling, Revolut, Chase, Wise, Bank of America, Deutsche Bank).
+   - Dynamic domain resolution via `unavatar.io` for UK retail banks with automatic brand monogram fallback.
+4. **Interactive Bank Instructions Editor (`src/client/components/BankInstructionsEditor.tsx`)**:
+   - Replaced raw settings textarea with structured editor featuring bank selection dropdown with live branding, live masked Sort Code input (`00-00-00`), Account Number validation, Payee Name with "Use business name" shortcut, optional international IBAN/BIC accordion, one-click copy buttons, and live client settlement preview card.
+5. **Live Invoice & Client Portal Parity (`InvoicePreview.tsx`, `ClientPortal.tsx`, `ReviewIssueModal.tsx`)**:
+   - Enhanced live preview and client settlement card with official bank branding, formatted settlement box, and one-click copy triggers.
+6. **Verification & Provenance**:
+   - Unit tests: Added `tests/banks.test.ts` (6 new unit tests). All 19 test files and 161/161 tests passing (`npm test`).
+   - TypeScript verification: 0 errors (`npm run check`).
+   - Production bundle build: successful (`npm run build`).
+   - UI provenance updated in `docs/UI_COMPONENT_SOURCES.md`.
+   - Punctuation compliance: 0 em dashes (`\u2014`) and 0 en dashes (`\u2013`).
+
+## Wave J: Universal Structured Address Inputs Across All Forms
+
+1. **Domain Schema & Address Formatting (`src/shared/domain.ts`)**:
+   - Extended `businessSchema` with optional separated address fields: `addressLine1`, `addressLine2`, `city`, `state`, `postalCode`, and `country`.
+   - Unified formatting with generic `Addressable` interface and `formatAddressLines` / `formatAddress` helpers, maintaining `formatClientAddressLines` and `formatClientAddress` aliases for full backward compatibility.
+   - Initialized empty workspace business with separated address field keys.
+   - Updated `issueErrors` to recognize structured business address fields alongside legacy combined `b.address`.
+2. **Business Settings Form (`src/client/components/Records.tsx`)**:
+   - Replaced single multi-line textarea with dedicated structured inputs: Country picker with `COMMON_COUNTRIES` datalist, Address Line 1, Address Line 2 (optional), City / Town, State / County / Province (dynamic label & placeholder), Postcode / ZIP code (dynamic label & placeholder), and dynamic Tax / VAT ID field.
+   - Added automatic synchronization so any edit to separated fields updates the combined `b.address` field in real time.
+   - Retained legacy unseparated address fallback for existing businesses with unstructured data.
+   - Added profile synchronization via `useEffect` on `w.business`.
+3. **Form Parity Across Invoices & Quotes (`src/client/components/Editor.tsx`, `src/client/components/Quotes.tsx`)**:
+   - Verified separated client address fields across Invoice composer and Quote composer.
+   - Added legacy unseparated address fallback to Quote composer for complete parity with invoice and client forms.
+4. **PDF, Email, and Live Preview Integration (`pdf.ts`, `emailTemplate.ts`, `InvoicePreview.tsx`)**:
+   - Enhanced PDF rendering to format business addresses using `formatBusinessPdfLines(b)`.
+   - Updated email templates and live invoice preview to format business addresses with `formatAddress(b)` / `formatAddressLines(b)`.
+5. **Verification & Quality**:
+   - Unit tests: Added test in `tests/phase2-records.test.ts` for separated business address fields. All 19 test files and 162/162 tests passing (`npx vitest run`).
+   - TypeScript verification: 0 errors (`npm run check`).
    - Punctuation compliance: 0 em dashes (`\u2014`) and 0 en dashes (`\u2013`).
 
 

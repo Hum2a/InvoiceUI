@@ -8,6 +8,7 @@ import {
   getCountryFieldLabels,
   formatClientAddress,
   formatClientAddressLines,
+  formatAddress,
   blankClient,
   type Workspace,
   type Client,
@@ -404,5 +405,40 @@ describe('Phase 2: Business, Clients, Projects, and Services (Section 2)', () =>
     expect(issued.client.country).toBe('Germany')
     expect(issued.client.taxId).toBe('DE123456789')
     expect(issued.client.postalCode).toBe('10117')
+  })
+
+  it('supports separated address fields for business settings and formats consistently', () => {
+    let w = emptyWorkspace()
+    w = applyCommand(w, {
+      type: 'business',
+      value: {
+        ...w.business,
+        name: 'Acme Global Ltd',
+        country: 'United Kingdom',
+        addressLine1: 'Suite 404, Innovation House',
+        addressLine2: '77 Kingsway',
+        city: 'London',
+        state: 'Greater London',
+        postalCode: 'WC2B 6SR',
+        address: formatAddress({
+          country: 'United Kingdom',
+          addressLine1: 'Suite 404, Innovation House',
+          addressLine2: '77 Kingsway',
+          city: 'London',
+          state: 'Greater London',
+          postalCode: 'WC2B 6SR',
+        }),
+      },
+    })
+
+    expect(w.business.addressLine1).toBe('Suite 404, Innovation House')
+    expect(w.business.addressLine2).toBe('77 Kingsway')
+    expect(w.business.city).toBe('London')
+    expect(w.business.state).toBe('Greater London')
+    expect(w.business.postalCode).toBe('WC2B 6SR')
+    expect(w.business.country).toBe('United Kingdom')
+    expect(w.business.address).toBe(
+      'Suite 404, Innovation House\n77 Kingsway\nLondon, Greater London, WC2B 6SR\nUnited Kingdom'
+    )
   })
 })

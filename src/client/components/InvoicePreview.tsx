@@ -1,10 +1,12 @@
 import { Fragment } from 'react'
-import { money, totals, formatClientAddress, type Invoice, type Business } from '../../shared/domain'
+import { money, totals, formatClientAddress, formatAddress, type Invoice, type Business } from '../../shared/domain'
+import { BankLogo } from './ui/BankLogo'
 
 export function InvoicePreview({ invoice: i, business: current }: { invoice: Invoice; business: Business }) {
   const b = i.business ?? current
   const t = totals(i)
   const clientAddress = formatClientAddress(i.client)
+  const businessAddress = formatAddress(b)
 
   return (
     <article className={`invoice template-${i.template}`} style={{ '--invoice-accent': i.accent } as React.CSSProperties}>
@@ -17,7 +19,7 @@ export function InvoicePreview({ invoice: i, business: current }: { invoice: Inv
           )}
           <p className="font-semibold">{b.name || 'Your business'}</p>
           <p className="muted whitespace-pre-line">
-            {b.address || 'Add your address in Settings'}
+            {businessAddress || 'Add your address in Settings'}
             {b.email && <><br />{b.email}</>}
             {b.taxId && <><br />Tax ID: {b.taxId}</>}
           </p>
@@ -126,7 +128,15 @@ export function InvoicePreview({ invoice: i, business: current }: { invoice: Inv
 
       <footer className="invoice-footer">
         <p className="font-medium">{b.footer || 'Thank you for your business.'}</p>
-        {b.bank && <p className="whitespace-pre-line mt-2">{b.bank}</p>}
+        {b.bank && (
+          <div className="mt-3 p-3 rounded-lg border border-[var(--line)] bg-[var(--soft)]/50 text-left">
+            <div className="flex items-center gap-2 mb-1.5">
+              <BankLogo bankId={b.bankId} bankName={b.bankName} bankLogo={b.bankLogo} size="xs" />
+              <span className="text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">Payment Details</span>
+            </div>
+            <p className="whitespace-pre-line text-xs leading-relaxed font-mono">{b.bank}</p>
+          </div>
+        )}
         <p className="mt-2">Reference: {i.reference || i.number || 'Assigned when issued'}</p>
       </footer>
     </article>

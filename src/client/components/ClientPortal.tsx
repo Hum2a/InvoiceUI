@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import { money } from '../../shared/domain'
+import { parseExistingBankString } from '../../shared/banks'
 import { Button, Badge } from './ui'
+import { BankLogo } from './ui/BankLogo'
 
 export interface ClientPortalProps {
   owner: string
@@ -242,11 +244,27 @@ export function ClientPortal({ owner, token, onClose }: ClientPortalProps) {
 
           <div className="md:col-span-2 bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-6 shadow-sm space-y-3">
             <h2 className="text-sm font-semibold text-foreground">Payment Details</h2>
-            {data.business.bank ? (
-              <div className="bg-[var(--soft)]/50 rounded-xl p-3.5 border border-[var(--border)] text-xs font-mono whitespace-pre-wrap leading-relaxed text-foreground/90">
-                {data.business.bank}
-              </div>
-            ) : (
+            {data.business.bank ? (() => {
+              const parsed = parseExistingBankString(data.business.bank)
+              return (
+                <div className="bg-[var(--soft)]/50 rounded-xl p-3.5 border border-[var(--border)] space-y-2.5">
+                  <div className="flex items-center justify-between pb-2 border-b border-[var(--border)]">
+                    <div className="flex items-center gap-2">
+                      <BankLogo bankId={parsed.bankId} bankName={parsed.bankName} size="xs" />
+                      <span className="text-xs font-semibold text-foreground">
+                        {parsed.bankName || 'Bank Transfer (BACS / Faster Payments)'}
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-medium px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                      Verified payee
+                    </span>
+                  </div>
+                  <div className="text-xs font-mono whitespace-pre-wrap leading-relaxed text-foreground/90">
+                    {data.business.bank}
+                  </div>
+                </div>
+              )
+            })() : (
               <p className="text-xs text-muted-foreground">
                 Please contact {data.business.email || data.business.name} for direct bank transfer instructions.
               </p>

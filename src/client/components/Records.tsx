@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   blankClient,
   money,
@@ -10,6 +10,7 @@ import {
   COMMON_COUNTRIES,
   getCountryFieldLabels,
   formatClientAddress,
+  formatAddress,
   type Workspace,
   type Client,
   type Service,
@@ -23,12 +24,13 @@ import {
   type WorkEntry,
   type Milestone,
 } from '../../shared/domain'
-import { Button, Field, Modal, Empty, Badge } from './ui'
+import { Button, Field, Modal, Empty, Badge, useConfirm } from './ui'
 import { NumberTicker } from './ui/NumberTicker'
 import { PaymentAllocationModal } from './PaymentAllocationModal'
 import { RefundModal } from './RefundModal'
 import { StatementModal } from './StatementModal'
 import { ClientPortalModal } from './ClientPortalModal'
+import { BankInstructionsEditor } from './BankInstructionsEditor'
 
 type Props = {
   workspace: Workspace
@@ -295,6 +297,7 @@ export function Records({
   onCreateInvoice,
   onOpenPreview,
 }: Props & { kind: 'Clients' | 'Projects' | 'Services' }) {
+  const { confirm } = useConfirm()
   const [query, setQuery] = useState('')
   const [selectedId, setSelectedId] = useState('')
   const [value, setValue] = useState<Client | Project | Service | null>(null)
@@ -488,6 +491,22 @@ export function Records({
               }}
             >
               Edit client
+            </Button>
+            <Button
+              variant="danger"
+              onClick={async () => {
+                const ok = await confirm({
+                  title: 'Delete client?',
+                  description: `Delete client "${c.name}"? Projects, unbilled entries, and quotes will also be cleaned up.`,
+                  confirmText: 'Delete client',
+                  confirmVariant: 'danger',
+                })
+                if (ok) {
+                  void remove(c.id)
+                }
+              }}
+            >
+              Delete client
             </Button>
             <Button variant="ghost" onClick={() => setStatementClientId(c.id)}>
               Statement of Account
@@ -783,7 +802,13 @@ export function Records({
                                     <Button
                                       variant="danger"
                                       onClick={async () => {
-                                        if (confirm('Delete this work entry?')) {
+                                        const ok = await confirm({
+                                          title: 'Delete work entry?',
+                                          description: 'Delete this work entry? This action cannot be undone.',
+                                          confirmText: 'Delete entry',
+                                          confirmVariant: 'danger',
+                                        })
+                                        if (ok) {
                                           try {
                                             await onCommand({ type: 'deleteWorkEntry', id: e.id })
                                           } catch (err) {
@@ -1014,8 +1039,14 @@ export function Records({
                             {!p.reversed && (
                               <Button
                                 variant="ghost"
-                                onClick={() => {
-                                  if (confirm('Reverse this client payment? It will restore outstanding invoice balances.')) {
+                                onClick={async () => {
+                                  const ok = await confirm({
+                                    title: 'Reverse payment?',
+                                    description: 'Reverse this client payment? It will restore outstanding invoice balances.',
+                                    confirmText: 'Reverse payment',
+                                    confirmVariant: 'danger',
+                                  })
+                                  if (ok) {
                                     void onCommand({ type: 'reverseClientPayment', paymentId: p.id })
                                   }
                                 }}
@@ -1105,8 +1136,14 @@ export function Records({
                 <Button
                   variant="danger"
                   type="button"
-                  onClick={() => {
-                    if (confirm('Delete this client?')) void remove(value.id)
+                  onClick={async () => {
+                    const ok = await confirm({
+                      title: 'Delete client?',
+                      description: 'Delete this client? Associated projects, unbilled entries, and quotes will also be cleaned up.',
+                      confirmText: 'Delete client',
+                      confirmVariant: 'danger',
+                    })
+                    if (ok) void remove(value.id)
                   }}
                 >
                   Delete
@@ -1188,6 +1225,22 @@ export function Records({
               }}
             >
               Edit project
+            </Button>
+            <Button
+              variant="danger"
+              onClick={async () => {
+                const ok = await confirm({
+                  title: 'Delete project?',
+                  description: `Delete project "${p.name}"? This will remove the project record.`,
+                  confirmText: 'Delete project',
+                  confirmVariant: 'danger',
+                })
+                if (ok) {
+                  void remove(p.id)
+                }
+              }}
+            >
+              Delete project
             </Button>
             <Button variant="primary" onClick={() => onCreateInvoice?.(p.clientId, p.id)}>
               + New invoice for {p.name}
@@ -1375,7 +1428,13 @@ export function Records({
                                 <Button
                                   variant="danger"
                                   onClick={async () => {
-                                    if (confirm('Delete this milestone?')) {
+                                    const ok = await confirm({
+                                      title: 'Delete milestone?',
+                                      description: 'Delete this milestone? This action cannot be undone.',
+                                      confirmText: 'Delete milestone',
+                                      confirmVariant: 'danger',
+                                    })
+                                    if (ok) {
                                       try {
                                         await onCommand({ type: 'deleteMilestone', id: m.id })
                                       } catch (err) {
@@ -1581,7 +1640,13 @@ export function Records({
                                 <Button
                                   variant="danger"
                                   onClick={async () => {
-                                    if (confirm('Delete this work entry?')) {
+                                    const ok = await confirm({
+                                      title: 'Delete work entry?',
+                                      description: 'Delete this work entry? This action cannot be undone.',
+                                      confirmText: 'Delete entry',
+                                      confirmVariant: 'danger',
+                                    })
+                                    if (ok) {
                                       try {
                                         await onCommand({ type: 'deleteWorkEntry', id: e.id })
                                       } catch (err) {
@@ -1785,8 +1850,14 @@ export function Records({
                 <Button
                   variant="danger"
                   type="button"
-                  onClick={() => {
-                    if (confirm('Delete this project?')) void remove(value.id)
+                  onClick={async () => {
+                    const ok = await confirm({
+                      title: 'Delete project?',
+                      description: 'Delete this project? This action cannot be undone.',
+                      confirmText: 'Delete project',
+                      confirmVariant: 'danger',
+                    })
+                    if (ok) void remove(value.id)
                   }}
                 >
                   Delete
@@ -1886,6 +1957,21 @@ export function Records({
                     >
                       {s.favourite ? '★ Unfavourite' : '☆ Favourite'}
                     </Button>
+                    <Button
+                      variant="ghost"
+                      className="text-rose-600 hover:text-rose-700"
+                      onClick={async () => {
+                        const ok = await confirm({
+                          title: 'Delete starter bundle?',
+                          description: `Delete starter bundle "${s.name}"? It will no longer appear as a preset.`,
+                          confirmText: 'Delete bundle',
+                          confirmVariant: 'danger',
+                        })
+                        if (ok) void removeStarter(s.id)
+                      }}
+                    >
+                      Delete
+                    </Button>
                   </div>
                 </article>
               ))}
@@ -1926,6 +2012,22 @@ export function Records({
                     }}
                   >
                     Edit
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    className="text-rose-600 hover:text-rose-700"
+                    onClick={async () => {
+                      const label = kind.slice(0, -1).toLowerCase()
+                      const ok = await confirm({
+                        title: `Delete ${label}?`,
+                        description: `Delete ${label} "${r.name}"? This action cannot be undone.`,
+                        confirmText: `Delete ${label}`,
+                        confirmVariant: 'danger',
+                      })
+                      if (ok) void remove(r.id)
+                    }}
+                  >
+                    Delete
                   </Button>
                   {kind !== 'Services' && (
                     <Button variant="ghost" onClick={() => onFilter(kind, r.id)}>
@@ -2013,8 +2115,14 @@ export function Records({
                 <Button
                   variant="danger"
                   type="button"
-                  onClick={() => {
-                    if (confirm(`Delete this ${kind.slice(0, -1).toLowerCase()}?`)) void remove(value.id)
+                  onClick={async () => {
+                    const ok = await confirm({
+                      title: `Delete ${kind.slice(0, -1).toLowerCase()}?`,
+                      description: `Are you sure you want to delete this ${kind.slice(0, -1).toLowerCase()}?`,
+                      confirmText: 'Delete',
+                      confirmVariant: 'danger',
+                    })
+                    if (ok) void remove(value.id)
                   }}
                 >
                   Delete
@@ -2208,8 +2316,14 @@ export function Records({
                 <Button
                   variant="danger"
                   type="button"
-                  onClick={() => {
-                    if (confirm('Delete this starter bundle?')) void removeStarter(starterValue.id)
+                  onClick={async () => {
+                    const ok = await confirm({
+                      title: 'Delete starter bundle?',
+                      description: 'Delete this starter bundle? This action cannot be undone.',
+                      confirmText: 'Delete starter bundle',
+                      confirmVariant: 'danger',
+                    })
+                    if (ok) void removeStarter(starterValue.id)
                   }}
                 >
                   Delete
@@ -2351,6 +2465,30 @@ export function Records({
             </label>
             {error && <p className="alert" role="alert">{error}</p>}
             <div className="modal-actions">
+              {w.projects.some(p => (p.milestones || []).some(m => m.id === editingMilestone.id)) && (
+                <Button
+                  variant="danger"
+                  type="button"
+                  onClick={async () => {
+                    const ok = await confirm({
+                      title: 'Delete milestone?',
+                      description: 'Delete this milestone? This action cannot be undone.',
+                      confirmText: 'Delete milestone',
+                      confirmVariant: 'danger',
+                    })
+                    if (ok) {
+                      try {
+                        await onCommand({ type: 'deleteMilestone', id: editingMilestone.id })
+                        setEditingMilestone(null)
+                      } catch (err) {
+                        setError(err instanceof Error ? err.message : 'Could not delete milestone')
+                      }
+                    }
+                  }}
+                >
+                  Delete
+                </Button>
+              )}
               <Button onClick={() => setEditingMilestone(null)}>Cancel</Button>
               <Button variant="primary" type="submit">
                 Save milestone
@@ -2504,6 +2642,30 @@ export function Records({
             </label>
             {error && <p className="alert" role="alert">{error}</p>}
             <div className="modal-actions">
+              {(w.workEntries || []).some(e => e.id === editingWorkEntry.id) && (
+                <Button
+                  variant="danger"
+                  type="button"
+                  onClick={async () => {
+                    const ok = await confirm({
+                      title: 'Delete work entry?',
+                      description: 'Delete this work entry? This action cannot be undone.',
+                      confirmText: 'Delete work entry',
+                      confirmVariant: 'danger',
+                    })
+                    if (ok) {
+                      try {
+                        await onCommand({ type: 'deleteWorkEntry', id: editingWorkEntry.id })
+                        setEditingWorkEntry(null)
+                      } catch (err) {
+                        setError(err instanceof Error ? err.message : 'Could not delete work entry')
+                      }
+                    }
+                  }}
+                >
+                  Delete
+                </Button>
+              )}
               <Button onClick={() => setEditingWorkEntry(null)}>Cancel</Button>
               <Button variant="primary" type="submit">
                 Save work entry
@@ -2516,4 +2678,265 @@ export function Records({
   )
 }
 
-export function Settings({workspace:w,onCommand,onExport}:Omit<Props,'onFilter'>&{onExport:(zip:boolean)=>void}){const [b,setB]=useState<Business>(w.business);const [message,setMessage]=useState('');const patch=(p:Partial<Business>)=>{setMessage('');setB(v=>({...v,...p}))};return <><div className="page-heading"><div><p className="eyebrow">Make it yours</p><h1>Business settings</h1><p className="muted">Used for new invoices. Issued documents keep their original details.</p></div></div><form className="settings-grid" onSubmit={e=>{e.preventDefault();void onCommand({type:'business',value:b}).then(()=>setMessage('Business details saved.')).catch(e=>setMessage(e.message))}}><section className="panel space-y-4"><h2>Your business</h2><Field label="Business / legal name"><input required value={b.name} onChange={e=>patch({name:e.target.value})}/></Field><Field label="Email"><input type="email" value={b.email} onChange={e=>patch({email:e.target.value})}/></Field><Field label="Business address"><textarea rows={3} value={b.address} onChange={e=>patch({address:e.target.value})}/></Field><Field label="Logo (PNG or JPEG, up to 400KB)"><input type="file" accept="image/png,image/jpeg" onChange={e=>{const file=e.target.files?.[0];if(!file)return;if(file.size>400000||!['image/png','image/jpeg'].includes(file.type)){setMessage('Choose a PNG or JPEG under 400KB');return}const reader=new FileReader();reader.onload=()=>patch({logo:String(reader.result)});reader.readAsDataURL(file)}}/></Field>{b.logo&&<div className="flex items-center gap-4"><img src={b.logo} alt="Business logo" className="h-16 max-w-40 object-contain"/><Button onClick={()=>patch({logo:''})}>Remove logo</Button></div>}<Field label="Tax identifier (optional)"><input value={b.taxId} onChange={e=>patch({taxId:e.target.value})}/></Field></section><section className="panel space-y-4"><h2>Payment & invoice defaults</h2><Field label="Bank / payment instructions"><textarea rows={5} value={b.bank} onChange={e=>patch({bank:e.target.value})}/></Field><Field label="Invoice footer"><textarea value={b.footer} onChange={e=>patch({footer:e.target.value})}/></Field><div className="form-grid"><Field label="Currency"><select value={b.currency} onChange={e=>patch({currency:e.target.value as Business['currency']})}>{['GBP','USD','EUR','CAD','AUD','JPY','KWD'].map(c=><option key={c}>{c}</option>)}</select></Field><Field label="Payment terms (days)"><input type="number" min="0" max="365" value={b.terms} onChange={e=>patch({terms:Number(e.target.value)})}/></Field><Field label="Number prefix"><input value={b.prefix} onChange={e=>patch({prefix:e.target.value})}/></Field><Field label="Accent colour"><input type="color" value={b.accent} onChange={e=>patch({accent:e.target.value})}/></Field><Field label="Default template"><select value={b.template} onChange={e=>patch({template:e.target.value as Business['template']})}>{['studio','minimal','classic'].map(t=><option key={t}>{t}</option>)}</select></Field><Field label="Timezone"><input value={b.timezone} onChange={e=>patch({timezone:e.target.value})}/></Field></div><p className="muted">Next issued number uses {b.prefix}-YEAR-0001, continuing the existing sequence for that year.</p></section><section className="panel space-y-4"><h2>Automated follow-ups & reminders</h2><label className="check"><input type="checkbox" checked={b.autoReminders??false} onChange={e=>patch({autoReminders:e.target.checked})}/>Enable automated overdue reminder sending (opt-in)</label><p className="fine-print muted">Defaults to off. When enabled, polite overdue reminders are sent automatically to clients with unpaid invoices according to each invoice&apos;s reminder schedule. Reminders always recheck outstanding balances and lifecycle immediately before sending, and never send to paid, void, or bounced recipients.</p></section><div className="settings-footer"><p role="status">{message}</p><Button variant="primary" type="submit">Save business settings</Button></div></form><section className="panel mt-6"><div className="section-heading"><div><h2>Your data, always yours</h2><p className="muted">Export settings, records, invoices, payments and history.</p></div><div className="actions"><Button onClick={()=>onExport(false)}>Export JSON</Button><Button onClick={()=>onExport(true)}>Export with PDFs</Button></div></div></section></>}
+export function Settings({
+  workspace: w,
+  onCommand,
+  onExport,
+}: Omit<Props, 'onFilter'> & { onExport: (zip: boolean) => void }) {
+  const [b, setB] = useState<Business>(w.business)
+  const [message, setMessage] = useState('')
+
+  useEffect(() => {
+    setB(w.business)
+  }, [w.business])
+
+  const patch = (p: Partial<Business>) => {
+    setMessage('')
+    setB(v => ({ ...v, ...p }))
+  }
+
+  const countryLabels = getCountryFieldLabels(b.country)
+
+  const handleAddressFieldChange = (field: keyof Business, val: string) => {
+    const updated = { ...b, [field]: val }
+    const formattedAddress = formatAddress(updated)
+    patch({ [field]: val, address: formattedAddress })
+  }
+
+  const handleCountryChange = (nextCountry: string) => {
+    const updated = { ...b, country: nextCountry }
+    const formattedAddress = formatAddress(updated)
+    patch({ country: nextCountry, address: formattedAddress })
+  }
+
+  return (
+    <>
+      <div className="page-heading">
+        <div>
+          <p className="eyebrow">Make it yours</p>
+          <h1>Business settings</h1>
+          <p className="muted">Used for new invoices. Issued documents keep their original details.</p>
+        </div>
+      </div>
+      <form
+        className="settings-grid"
+        onSubmit={e => {
+          e.preventDefault()
+          void onCommand({ type: 'business', value: b })
+            .then(() => setMessage('Business details saved.'))
+            .catch(e => setMessage(e.message))
+        }}
+      >
+        <section className="panel space-y-4">
+          <h2>Your business</h2>
+          <Field label="Business / legal name">
+            <input
+              required
+              value={b.name}
+              onChange={e => patch({ name: e.target.value })}
+              placeholder="e.g. Acme Studio Ltd"
+            />
+          </Field>
+          <Field label="Email">
+            <input
+              type="email"
+              value={b.email}
+              onChange={e => patch({ email: e.target.value })}
+              placeholder="hello@example.com"
+            />
+          </Field>
+
+          <Field label="Country" hint="Adapts address format and tax identifier labels">
+            <input
+              list="business-countries-list"
+              value={b.country || ''}
+              onChange={e => handleCountryChange(e.target.value)}
+              placeholder="e.g. United Kingdom"
+            />
+            <datalist id="business-countries-list">
+              {COMMON_COUNTRIES.map(c => (
+                <option key={c} value={c} />
+              ))}
+            </datalist>
+          </Field>
+
+          <Field label="Address line 1">
+            <input
+              value={b.addressLine1 || ''}
+              onChange={e => handleAddressFieldChange('addressLine1', e.target.value)}
+              placeholder="Street address, building or suite"
+            />
+          </Field>
+
+          <Field label="Address line 2 (optional)">
+            <input
+              value={b.addressLine2 || ''}
+              onChange={e => handleAddressFieldChange('addressLine2', e.target.value)}
+              placeholder="Apartment, unit, suite, floor"
+            />
+          </Field>
+
+          <div className="form-grid three">
+            <Field label="City / Town">
+              <input
+                value={b.city || ''}
+                onChange={e => handleAddressFieldChange('city', e.target.value)}
+                placeholder="e.g. London"
+              />
+            </Field>
+            <Field label={countryLabels.stateLabel}>
+              <input
+                value={b.state || ''}
+                onChange={e => handleAddressFieldChange('state', e.target.value)}
+                placeholder={countryLabels.statePlaceholder}
+              />
+            </Field>
+            <Field label={countryLabels.postalCodeLabel}>
+              <input
+                value={b.postalCode || ''}
+                onChange={e => handleAddressFieldChange('postalCode', e.target.value)}
+                placeholder={countryLabels.postalCodePlaceholder}
+              />
+            </Field>
+          </div>
+
+          {!b.addressLine1 && b.address && (
+            <Field
+              label="Legacy unseparated address"
+              hint="Your business has an older unseparated address. Entering separated fields above will update it."
+            >
+              <textarea
+                rows={2}
+                value={b.address}
+                onChange={e => patch({ address: e.target.value })}
+              />
+            </Field>
+          )}
+
+          <Field label="Logo (PNG or JPEG, up to 400KB)">
+            <input
+              type="file"
+              accept="image/png,image/jpeg"
+              onChange={e => {
+                const file = e.target.files?.[0]
+                if (!file) return
+                if (file.size > 400000 || !['image/png', 'image/jpeg'].includes(file.type)) {
+                  setMessage('Choose a PNG or JPEG under 400KB')
+                  return
+                }
+                const reader = new FileReader()
+                reader.onload = () => patch({ logo: String(reader.result) })
+                reader.readAsDataURL(file)
+              }}
+            />
+          </Field>
+          {b.logo && (
+            <div className="flex items-center gap-4">
+              <img src={b.logo} alt="Business logo" className="h-16 max-w-40 object-contain" />
+              <Button onClick={() => patch({ logo: '' })}>Remove logo</Button>
+            </div>
+          )}
+          <Field label={countryLabels.taxIdLabel} hint="Displayed on invoices and quotes">
+            <input
+              value={b.taxId}
+              onChange={e => patch({ taxId: e.target.value })}
+              placeholder={countryLabels.taxIdPlaceholder}
+            />
+          </Field>
+        </section>
+
+        <section className="panel space-y-4">
+          <h2>Payment & invoice defaults</h2>
+          <BankInstructionsEditor business={b} onChange={patch} />
+          <Field label="Invoice footer">
+            <textarea value={b.footer} onChange={e => patch({ footer: e.target.value })} />
+          </Field>
+          <div className="form-grid">
+            <Field label="Currency">
+              <select
+                value={b.currency}
+                onChange={e => patch({ currency: e.target.value as Business['currency'] })}
+              >
+                {['GBP', 'USD', 'EUR', 'CAD', 'AUD', 'JPY', 'KWD'].map(c => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Payment terms (days)">
+              <input
+                type="number"
+                min="0"
+                max="365"
+                value={b.terms}
+                onChange={e => patch({ terms: Number(e.target.value) })}
+              />
+            </Field>
+            <Field label="Number prefix">
+              <input value={b.prefix} onChange={e => patch({ prefix: e.target.value })} />
+            </Field>
+            <Field label="Accent colour">
+              <input type="color" value={b.accent} onChange={e => patch({ accent: e.target.value })} />
+            </Field>
+            <Field label="Default template">
+              <select
+                value={b.template}
+                onChange={e => patch({ template: e.target.value as Business['template'] })}
+              >
+                {['studio', 'minimal', 'classic'].map(t => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Timezone">
+              <input value={b.timezone} onChange={e => patch({ timezone: e.target.value })} />
+            </Field>
+          </div>
+          <p className="muted">
+            Next issued number uses {b.prefix}-YEAR-0001, continuing the existing sequence for that year.
+          </p>
+        </section>
+
+        <section className="panel space-y-4">
+          <h2>Automated follow-ups & reminders</h2>
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={b.autoReminders ?? false}
+              onChange={e => patch({ autoReminders: e.target.checked })}
+            />
+            Enable automated overdue reminder sending (opt-in)
+          </label>
+          <p className="fine-print muted">
+            Defaults to off. When enabled, polite overdue reminders are sent automatically to clients with unpaid
+            invoices according to each invoice&apos;s reminder schedule. Reminders always recheck outstanding balances
+            and lifecycle immediately before sending, and never send to paid, void, or bounced recipients.
+          </p>
+        </section>
+
+        <div className="settings-footer">
+          <p role="status">{message}</p>
+          <Button variant="primary" type="submit">
+            Save business settings
+          </Button>
+        </div>
+      </form>
+
+      <section className="panel mt-6">
+        <div className="section-heading">
+          <div>
+            <h2>Your data, always yours</h2>
+            <p className="muted">Export settings, records, invoices, payments and history.</p>
+          </div>
+          <div className="actions">
+            <Button onClick={() => onExport(false)}>Export JSON</Button>
+            <Button onClick={() => onExport(true)}>Export with PDFs</Button>
+          </div>
+        </div>
+      </section>
+    </>
+  )
+}

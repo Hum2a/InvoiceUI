@@ -25,6 +25,7 @@
     "sync:agents:check": "node scripts/sync-agent-config.mjs --check"
   },
   "dependencies": {
+    "@icons-pack/react-simple-icons": "^13.15.1",
     "@neon/config": "^1.4.2",
     "@neon/env": "^1.3.2",
     "@neondatabase/serverless": "^1.1.0",

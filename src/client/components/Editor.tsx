@@ -20,8 +20,8 @@ import {
   type Starter,
   type Attachment,
 } from '../../shared/domain'
-import { Button, Field, Badge, Modal } from './ui'
-import { Copy, Download, Send, ArrowRight } from './ui/AnimatedIcon'
+import { Button, Field, Badge, Modal, useConfirm } from './ui'
+import { Copy, Download, Send, ArrowRight, Trash2 } from './ui/AnimatedIcon'
 import { InvoicePreview } from './InvoicePreview'
 import { ReviewIssueModal } from './ReviewIssueModal'
 import { CorrectionModal } from './CorrectionModal'
@@ -43,6 +43,7 @@ export function Editor({
   onDownload: (i: Invoice, breakdown?: boolean) => Promise<void>
   onAction: (name: string, i: Invoice) => void
 }) {
+  const { confirm } = useConfirm()
   const recoveryKey = `invoiceui:recovery:${owner}:${invoice.id}`
   const [draft, setDraft] = useState<Invoice>(() => {
     if (invoice.lifecycle !== 'draft') return invoice
@@ -625,9 +626,34 @@ export function Editor({
             Download PDF
           </Button>
           {editable ? (
-            <Button variant="primary" onClick={() => setReviewOpen(true)} disabled={saving}>
-              Review & issue <ArrowRight size={13} animateOnHover className="ml-1 inline" />
-            </Button>
+            <>
+              <Button
+                variant="danger"
+                onClick={async () => {
+                  const ok = await confirm({
+                    title: 'Delete draft invoice?',
+                    description: 'Are you sure you want to delete this unissued draft? All draft changes will be discarded.',
+                    confirmText: 'Delete draft',
+                    confirmVariant: 'danger',
+                  })
+                  if (ok) {
+                    try {
+                      await onCommand({ type: 'deleteDraft', id: invoice.id })
+                      localStorage.removeItem(recoveryKey)
+                      action('deleted')
+                    } catch (e) {
+                      setError(e instanceof Error ? e.message : 'Could not delete draft')
+                    }
+                  }
+                }}
+              >
+                <Trash2 size={13} animateOnHover className="mr-1 inline" />
+                Delete draft
+              </Button>
+              <Button variant="primary" onClick={() => setReviewOpen(true)} disabled={saving}>
+                Review & issue <ArrowRight size={13} animateOnHover className="ml-1 inline" />
+              </Button>
+            </>
           ) : (
             invoice.lifecycle === 'issued' && (
               <>

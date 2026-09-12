@@ -19,7 +19,7 @@ import {
   type Line,
   type Business,
 } from '../../shared/domain'
-import { Button, Field, Modal, Badge, Empty } from './ui'
+import { Button, Field, Modal, Badge, Empty, useConfirm } from './ui'
 import { NumberTicker } from './ui/NumberTicker'
 import { ShinyText } from './ui/ShinyText'
 import { downloadBlob } from '../workspace'
@@ -40,6 +40,7 @@ export function Quotes({
   onSelectInvoice,
   setNotice,
 }: QuotesProps) {
+  const { confirm } = useConfirm()
   const [filter, setFilter] = useState<FilterStatus>('all')
   const [query, setQuery] = useState('')
   const [composerOpen, setComposerOpen] = useState(false)
@@ -379,7 +380,13 @@ export function Quotes({
   }
 
   const handleDeleteQuote = async (q: Quote) => {
-    if (!window.confirm(`Delete quote ${q.quoteNumber} (Rev ${q.revision})?`)) return
+    const ok = await confirm({
+      title: 'Delete quote?',
+      description: `Delete quote ${q.quoteNumber} (Rev ${q.revision})? This will permanently remove this quotation.`,
+      confirmText: 'Delete quote',
+      confirmVariant: 'danger',
+    })
+    if (!ok) return
     setLoadingAction(`delete-${q.id}`)
     try {
       await onCommand({ type: 'deleteQuote', id: q.id })
@@ -729,7 +736,7 @@ export function Quotes({
                       )}
                     </div>
 
-                    {latest.status === 'draft' && !latest.convertedInvoiceId && (
+                    {!latest.convertedInvoiceId && (
                       <Button
                         variant="ghost"
                         className="text-xs text-rose-600"
@@ -780,13 +787,25 @@ export function Quotes({
                                     <td>{money(revTotals.total, rev.currency)}</td>
                                     <td>{rev.supersededAt ? rev.supersededAt.slice(0, 10) : '-'}</td>
                                     <td>
-                                      <Button
-                                        variant="ghost"
-                                        className="text-xs py-0 h-6 px-2"
-                                        onClick={() => void handleDownloadPDF(rev)}
-                                      >
-                                        Download PDF
-                                      </Button>
+                                      <div className="flex items-center gap-1">
+                                        <Button
+                                          variant="ghost"
+                                          className="text-xs py-0 h-6 px-2"
+                                          onClick={() => void handleDownloadPDF(rev)}
+                                        >
+                                          Download PDF
+                                        </Button>
+                                        {!rev.convertedInvoiceId && (
+                                          <Button
+                                            variant="ghost"
+                                            className="text-xs py-0 h-6 px-2 text-rose-600 hover:text-rose-700"
+                                            onClick={() => void handleDeleteQuote(rev)}
+                                            disabled={loadingAction === `delete-${rev.id}`}
+                                          >
+                                            Delete
+                                          </Button>
+                                        )}
+                                      </div>
                                     </td>
                                   </tr>
                                 )
@@ -948,6 +967,16 @@ export function Quotes({
                         placeholder={countryLabels.taxIdPlaceholder}
                       />
                     </Field>
+
+                    {!formClient.addressLine1 && formClient.address && (
+                      <Field label="Legacy unseparated address" hint="This quote has an older unseparated address. Entering separated fields above will update it.">
+                        <textarea
+                          rows={2}
+                          value={formClient.address}
+                          onChange={e => setFormClient({ ...formClient, address: e.target.value })}
+                        />
+                      </Field>
+                    )}
                   </>
                 )
               })()}
@@ -1132,27 +1161,44 @@ export function Quotes({
               />
             </Field>
 
-            <div className="flex justify-end gap-2 pt-2 border-t border-[var(--line)]">
-              <Button
-                variant="ghost"
-                onClick={() => {
-                  setComposerOpen(false)
-                  setEditingQuote(null)
-                }}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="primary"
-                onClick={() => void handleSaveQuote()}
-                disabled={loadingAction === 'save'}
-              >
-                {loadingAction === 'save'
-                  ? 'Saving...'
-                  : editingQuote
-                    ? 'Save changes'
-                    : 'Create quote draft'}
-              </Button>
+            <div className="flex items-center justify-between gap-2 pt-2 border-t border-[var(--line)]">
+              {editingQuote && !editingQuote.convertedInvoiceId ? (
+                <Button
+                  variant="danger"
+                  type="button"
+                  onClick={async () => {
+                    await handleDeleteQuote(editingQuote)
+                    setComposerOpen(false)
+                    setEditingQuote(null)
+                  }}
+                  disabled={loadingAction === `delete-${editingQuote.id}`}
+                >
+                  Delete quote
+                </Button>
+              ) : <div />}
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  type="button"
+                  onClick={() => {
+                    setComposerOpen(false)
+                    setEditingQuote(null)
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="primary"
+                  onClick={() => void handleSaveQuote()}
+                  disabled={loadingAction === 'save'}
+                >
+                  {loadingAction === 'save'
+                    ? 'Saving...'
+                    : editingQuote
+                      ? 'Save changes'
+                      : 'Create quote draft'}
+                </Button>
+              </div>
             </div>
           </div>
         </Modal>

@@ -10,6 +10,8 @@ import {
 } from '../../shared/domain'
 import { Modal, Button } from './ui'
 import { Download, ArrowRight } from './ui/AnimatedIcon'
+import { BankLogo } from './ui/BankLogo'
+import { parseExistingBankString } from '../../shared/banks'
 
 export function ReviewIssueModal({
   open,
@@ -236,10 +238,23 @@ export function ReviewIssueModal({
 
         {/* Payment Instructions Preview */}
         <div className="review-section">
-          <h4 className="font-semibold text-xs uppercase tracking-wider text-[var(--muted)] mb-1">
-            Payment instructions
-          </h4>
-          <p className="text-xs whitespace-pre-line text-[var(--muted)]">
+          <div className="flex items-center gap-2 mb-1.5">
+            {(() => {
+              const instr = draft.client.paymentInstructions || workspace.business.bank || ''
+              const parsed = parseExistingBankString(instr)
+              const bId = workspace.business.bankId || parsed.bankId
+              const bName = workspace.business.bankName || parsed.bankName
+              return (
+                <>
+                  <BankLogo bankId={bId} bankName={bName} size="xs" />
+                  <h4 className="font-semibold text-xs uppercase tracking-wider text-[var(--muted)]">
+                    Payment instructions {bName ? `(${bName})` : ''}
+                  </h4>
+                </>
+              )
+            })()}
+          </div>
+          <p className="text-xs whitespace-pre-line text-[var(--muted)] font-mono bg-[var(--soft)]/50 p-2.5 rounded-lg border border-[var(--line)]">
             {draft.client.paymentInstructions || workspace.business.bank || 'No payment instructions specified.'}
           </p>
         </div>

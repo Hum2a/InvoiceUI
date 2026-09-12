@@ -7,7 +7,7 @@ import {
   type Command,
   type Envelope,
 } from '../../shared/domain'
-import { Modal, Button, Badge } from './ui'
+import { Modal, Button, Badge, useConfirm } from './ui'
 
 export function ClientPortalModal({
   workspace: w,
@@ -26,6 +26,7 @@ export function ClientPortalModal({
   onOpenPreview?: (token: string) => void
   onRecordPayment?: (notice: { amount?: string; reference?: string; date?: string }) => void
 }) {
+  const { confirm } = useConfirm()
   const client = w.clients.find(c => c.id === clientId)
   const defaultExpiry = addDays(today(w.business.timezone), 90)
 
@@ -74,7 +75,13 @@ export function ClientPortalModal({
   }
 
   async function handleRevoke() {
-    if (!confirm('Revoke portal access for this client? Existing links will stop working immediately.')) {
+    const ok = await confirm({
+      title: 'Revoke portal access?',
+      description: 'Revoke portal access for this client? Existing links will stop working immediately.',
+      confirmText: 'Revoke access',
+      confirmVariant: 'danger',
+    })
+    if (!ok) {
       return
     }
     setBusy(true)

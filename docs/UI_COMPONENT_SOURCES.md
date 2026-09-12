@@ -15,12 +15,13 @@ All five mandatory UI libraries are actively integrated and rendered in the appl
 
 | Library | Component | Official Source URL | Licence | Local Path | Screens / Usage |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **shadcn/ui** | `Button`, `Dialog` (Modal), `Field`, `Badge`, `Empty` | [ui.shadcn.com](https://ui.shadcn.com) | MIT | `src/client/components/ui.tsx` | All screens: Invoices, Editor, Records, Settings, Actions, Modals |
+| **shadcn/ui** | `Button`, `Dialog` (Modal, ConfirmModal), `Field`, `Badge`, `Empty` | [ui.shadcn.com](https://ui.shadcn.com) | MIT | `src/client/components/ui.tsx`, `src/client/components/ConfirmModal.tsx` | All screens: Invoices, Editor, Records, Settings, Actions, Modals |
 | **Motion** | `motion.div`, `MotionConfig`, `AnimatePresence` | [motion.dev](https://motion.dev) | MIT | `src/client/App.tsx`, `src/client/components/ui/*` | App shell, reduced motion enforcement, login entrance, toasts, transitions |
 | **Magic UI** | `NumberTicker` | [magicui.design/docs/components/number-ticker](https://magicui.design/docs/components/number-ticker) | MIT | `src/client/components/ui/NumberTicker.tsx` | Invoices dashboard summary cards (Invoiced, Cash Received, Outstanding, Due Soon, Overdue, Ageing buckets 1-30, 31-60, 61-90, 91+), Client & Project detail financial summaries |
 | **React Bits** | `ShinyText` | [reactbits.dev/text-animations/shiny-text](https://reactbits.dev/text-animations/shiny-text) | MIT | `src/client/components/ui/ShinyText.tsx` | Active dashboard filter indicator on metric and ageing cards, status pills, live preview highlights |
 | **Animate UI** | `AnimatedTabs` | [animate-ui.com/docs/components/animated-tabs](https://animate-ui.com/docs/components/animated-tabs) | MIT | `src/client/components/ui/AnimatedTabs.tsx` | App header main navigation (`Invoices`, `Quotes`, `Attention`, `Clients`, `Projects`, `Services`, `Settings`) with spring layout transitions |
 | **Animate UI** | Animated Lucide Icons (`Search`, `RefreshCw`, `Plus`, `Download`, `Trash2`, `Copy`, `Send`, `Check`, `ExternalLink`, `ArrowLeft`, `ArrowRight`, `X`, `Sparkles`, `Settings`, `Clock`) | [animate-ui.com/docs/icons](https://animate-ui.com/docs/icons) | MIT | `src/client/components/ui/AnimatedIcon.tsx` | Global command search, workspace refresh, New invoice creation, editor actions, modal controls, bulk operations, table row navigation, and PDF downloads |
+| **Simple Icons** | `@icons-pack/react-simple-icons` (`SiMonzo`, `SiBarclays`, `SiHsbc`, `SiStarlingbank`, `SiRevolut`, `SiChase`, `SiWise`, `SiBankofamerica`, `SiDeutschebank`, `SiCaixabank`, `SiCommerzbank`) | [simpleicons.org](https://simpleicons.org) | CC0-1.0 | `src/client/components/ui/BankLogo.tsx` | Settings bank selector, live invoice preview, payment modal, client settlement portal |
 
 ---
 

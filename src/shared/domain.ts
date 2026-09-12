@@ -6,7 +6,38 @@ const id = z.string().uuid()
 const date = z.iso.date()
 const amount = z.string().regex(/^\d{1,9}(\.\d{1,4})?$/, 'Use a positive number with up to four decimal places')
 const email = z.union([z.email(), z.literal('')])
-export const businessSchema = z.object({ name: text, email, address: text, bank: text, footer: text, taxId: text, logo: z.string().max(600000), currency: z.enum(['GBP','USD','EUR','CAD','AUD','JPY','KWD']), terms: z.number().int().min(0).max(365), prefix: z.string().regex(/^[A-Za-z0-9-]{1,20}$/), accent: z.string().regex(/^#[0-9a-fA-F]{6}$/), template: z.enum(['studio','minimal','classic']), timezone: z.string().refine(v => { try { new Intl.DateTimeFormat('en', {timeZone:v}); return true } catch {return false} }), autoReminders: z.boolean().default(false), onboardingDismissed: z.boolean().default(false).optional() })
+export const businessSchema = z.object({
+  name: text,
+  email,
+  address: text,
+  addressLine1: text.optional(),
+  addressLine2: text.optional(),
+  city: text.optional(),
+  state: text.optional(),
+  postalCode: text.optional(),
+  country: text.optional(),
+  bank: text,
+  bankName: text.optional(),
+  bankId: z.string().optional(),
+  accountName: text.optional(),
+  accountNumber: text.optional(),
+  sortCode: text.optional(),
+  iban: text.optional(),
+  bic: text.optional(),
+  bankLogo: z.string().max(600000).optional(),
+  footer: text,
+  taxId: text,
+  logo: z.string().max(600000),
+  currency: z.enum(['GBP','USD','EUR','CAD','AUD','JPY','KWD']),
+  terms: z.number().int().min(0).max(365),
+  prefix: z.string().regex(/^[A-Za-z0-9-]{1,20}$/),
+  accent: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+  template: z.enum(['studio','minimal','classic']),
+  timezone: z.string().refine(v => { try { new Intl.DateTimeFormat('en', {timeZone:v}); return true } catch {return false} }),
+  autoReminders: z.boolean().default(false),
+  onboardingDismissed: z.boolean().default(false).optional()
+})
+export * from './banks'
 export const portalNoticeSchema = z.object({ id: z.string(), date, amount: amount.optional(), reference: text.optional(), notes: text.optional(), created: z.string() })
 export type PortalNotice = z.infer<typeof portalNoticeSchema>
 export const clientPortalSchema = z.object({ token: z.string(), expires: date, allowedInvoiceIds: z.array(z.string()).optional(), allowStatements: z.boolean().default(true).optional(), allowAttachments: z.boolean().default(true).optional(), paymentNotices: z.array(portalNoticeSchema).default([]).optional() })
@@ -137,33 +168,46 @@ export function getCountryFieldLabels(country?: string): CountryFieldLabels {
   }
 }
 
-export function formatClientAddressLines(client: Partial<Client>): string[] {
+export interface Addressable {
+  address?: string
+  addressLine1?: string
+  addressLine2?: string
+  city?: string
+  state?: string
+  postalCode?: string
+  country?: string
+}
+
+export function formatAddressLines(target: Addressable): string[] {
   const hasSeparated = Boolean(
-    client.addressLine1?.trim() ||
-    client.addressLine2?.trim() ||
-    client.city?.trim() ||
-    client.state?.trim() ||
-    client.postalCode?.trim() ||
-    client.country?.trim()
+    target.addressLine1?.trim() ||
+    target.addressLine2?.trim() ||
+    target.city?.trim() ||
+    target.state?.trim() ||
+    target.postalCode?.trim() ||
+    target.country?.trim()
   )
   if (!hasSeparated) {
-    if (!client.address?.trim()) return []
-    return client.address.split('\n').map(l => l.trim()).filter(Boolean)
+    if (!target.address?.trim()) return []
+    return target.address.split('\n').map(l => l.trim()).filter(Boolean)
   }
   const lines: string[] = []
-  if (client.addressLine1?.trim()) lines.push(client.addressLine1.trim())
-  if (client.addressLine2?.trim()) lines.push(client.addressLine2.trim())
-  const cityStateZip = [client.city?.trim(), client.state?.trim(), client.postalCode?.trim()].filter(Boolean).join(', ')
+  if (target.addressLine1?.trim()) lines.push(target.addressLine1.trim())
+  if (target.addressLine2?.trim()) lines.push(target.addressLine2.trim())
+  const cityStateZip = [target.city?.trim(), target.state?.trim(), target.postalCode?.trim()].filter(Boolean).join(', ')
   if (cityStateZip) lines.push(cityStateZip)
-  if (client.country?.trim()) lines.push(client.country.trim())
+  if (target.country?.trim()) lines.push(target.country.trim())
   return lines
 }
 
-export function formatClientAddress(client: Partial<Client>): string {
-  const lines = formatClientAddressLines(client)
+export function formatAddress(target: Addressable): string {
+  const lines = formatAddressLines(target)
   if (lines.length > 0) return lines.join('\n')
-  return client.address?.trim() || ''
+  return target.address?.trim() || ''
 }
+
+export const formatClientAddressLines = formatAddressLines
+export const formatClientAddress = formatAddress
 export const milestoneSchema = z.object({id, projectId:z.string(), title:text, description:text.optional(), amount, order:z.number().int().min(1), status:z.enum(['pending','reserved','billed']).default('pending'), isDeposit:z.boolean().default(false), reservedDraftId:z.string().optional(), billedInvoiceId:z.string().optional(), billedAt:z.string().optional(), created:z.string(), updated:z.string()})
 export type Milestone = z.infer<typeof milestoneSchema>
 export const projectSchema = z.object({id, name:text, clientId:z.string(), notes:text, agreedAmount:amount.optional(), currency:businessSchema.shape.currency.optional(), milestones:z.array(milestoneSchema).optional()})
@@ -215,7 +259,7 @@ export type Envelope={version:number;data:Workspace}
 export function today(timezone='Europe/London',now=new Date()){return new Intl.DateTimeFormat('en-CA',{timeZone:timezone,year:'numeric',month:'2-digit',day:'2-digit'}).format(now)}
 export function addDays(value:string,days:number){const d=new Date(value+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+days);return d.toISOString().slice(0,10)}
 export function nextMonth(value:string,months:number,day:number){const d=new Date(value+'T12:00:00Z');d.setUTCDate(1);d.setUTCMonth(d.getUTCMonth()+months);const last=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth()+1,0)).getUTCDate();d.setUTCDate(Math.min(day,last));return d.toISOString().slice(0,10)}
-export function emptyWorkspace():Workspace{const initialBusiness:Business={name:'',email:'',address:'',bank:'',footer:'Thank you for your business.',taxId:'',logo:'',currency:'GBP',terms:30,prefix:'INV',accent:'#bef264',template:'studio',timezone:'Europe/London',autoReminders:false,onboardingDismissed:false};const profileId=crypto.randomUUID();const defaultProfile:BusinessProfile={id:profileId,name:'Primary Profile',isDefault:true,business:initialBusiness,clients:[],projects:[],services:[],starters:[],invoices:[],creditNotes:[],payments:[],receipts:[],quotes:[],workEntries:[],schedules:[],messages:[],sequence:{},audit:[],created:new Date().toISOString(),updated:new Date().toISOString()};return {schemaVersion:1,business:initialBusiness,clients:[],projects:[],services:[],starters:[],invoices:[],creditNotes:[],payments:[],receipts:[],quotes:[],workEntries:[],schedules:[],messages:[],sequence:{},audit:[],activeProfileId:profileId,profiles:[defaultProfile]}}
+export function emptyWorkspace():Workspace{const initialBusiness:Business={name:'',email:'',address:'',addressLine1:'',addressLine2:'',city:'',state:'',postalCode:'',country:'',bank:'',footer:'Thank you for your business.',taxId:'',logo:'',currency:'GBP',terms:30,prefix:'INV',accent:'#bef264',template:'studio',timezone:'Europe/London',autoReminders:false,onboardingDismissed:false};const profileId=crypto.randomUUID();const defaultProfile:BusinessProfile={id:profileId,name:'Primary Profile',isDefault:true,business:initialBusiness,clients:[],projects:[],services:[],starters:[],invoices:[],creditNotes:[],payments:[],receipts:[],quotes:[],workEntries:[],schedules:[],messages:[],sequence:{},audit:[],created:new Date().toISOString(),updated:new Date().toISOString()};return {schemaVersion:1,business:initialBusiness,clients:[],projects:[],services:[],starters:[],invoices:[],creditNotes:[],payments:[],receipts:[],quotes:[],workEntries:[],schedules:[],messages:[],sequence:{},audit:[],activeProfileId:profileId,profiles:[defaultProfile]}}
 export function ensureProfiles(w:Workspace):Workspace{if(!w.profiles||w.profiles.length===0){const profileId=w.activeProfileId||crypto.randomUUID();const defaultProfile:BusinessProfile={id:profileId,name:w.business.name?`${w.business.name} (Primary)`:'Primary Profile',isDefault:true,business:structuredClone(w.business),clients:structuredClone(w.clients||[]),projects:structuredClone(w.projects||[]),services:structuredClone(w.services||[]),starters:structuredClone(w.starters||[]),invoices:structuredClone(w.invoices||[]),creditNotes:structuredClone(w.creditNotes||[]),payments:structuredClone(w.payments||[]),receipts:structuredClone(w.receipts||[]),quotes:structuredClone(w.quotes||[]),workEntries:structuredClone(w.workEntries||[]),schedules:structuredClone(w.schedules||[]),messages:structuredClone(w.messages||[]),sequence:structuredClone(w.sequence||{}),audit:structuredClone(w.audit||[]),created:new Date().toISOString(),updated:new Date().toISOString()};w.profiles=[defaultProfile];w.activeProfileId=profileId}if(!w.activeProfileId||!w.profiles.some(p=>p.id===w.activeProfileId)){w.activeProfileId=w.profiles[0].id}return w}
 export function blankClient():Client{return {id:crypto.randomUUID(),name:'',email:'',address:'',contact:'',phone:'',addressLine1:'',addressLine2:'',city:'',state:'',postalCode:'',country:'',taxId:'',cc:[],replyTo:'',terms:30,notes:''}}
 export function newInvoice(w:Workspace):Invoice{const now=new Date().toISOString();const issueDate=today(w.business.timezone);return {id:crypto.randomUUID(),number:'',lifecycle:'draft',archived:false,business:null,clientId:'',projectId:'',client:blankClient(),issueDate,dueDate:addDays(issueDate,w.business.terms),terms:w.business.terms,manualDue:false,currency:w.business.currency,lines:[{id:crypto.randomUUID(),description:'',quantity:'1',rate:'0',unit:'fixed'}],tax:'0',discount:'0',discountType:'amount',deposit:'0',notes:'',internalNotes:'',attachments:[],po:'',reference:'',breakdown:'',instalments:[],template:w.business.template,accent:w.business.accent,payments:[],creditNoteIds:[],created:now,updated:now,reminder:{enabled:false,days:7,lastDate:''}}}
@@ -316,9 +360,10 @@ export function projectFinancials(project: Project, w: Workspace) {
     currency,
   };
 }
-export function issueErrors(i:Invoice,b:Business){const errors:string[]=[];if(!b.name.trim()||!b.address.trim())errors.push('Add your business name and address in Settings.');if(!i.client.name.trim())errors.push('Add a client name.');if(i.lines.some(l=>!l.description.trim()||new Decimal(l.quantity).lte(0)))errors.push('Each line needs a description and a quantity above zero.');if(i.dueDate<i.issueDate)errors.push('Due date must not precede issue date.');const t=totals(i);if(new Decimal(i.discount).lt(0)||(i.discountType==='percent'&&new Decimal(i.discount).gt(100))||new Decimal(t.discount).gt(t.subtotal))errors.push('Discount exceeds the subtotal.');if(new Decimal(i.deposit).gt(t.total))errors.push('Requested deposit exceeds the total.');if(i.instalments.length&&i.instalments.reduce((a,x)=>a.add(x.amount),new Decimal(0)).gt(t.total))errors.push('Instalments exceed the total.');return errors}
+export function issueErrors(i:Invoice,b:Business){const errors:string[]=[];const hasBusinessAddress=Boolean(b.address?.trim()||b.addressLine1?.trim()||b.city?.trim()||b.postalCode?.trim());if(!b.name.trim()||!hasBusinessAddress)errors.push('Add your business name and address in Settings.');if(!i.client.name.trim())errors.push('Add a client name.');if(i.lines.some(l=>!l.description.trim()||new Decimal(l.quantity).lte(0)))errors.push('Each line needs a description and a quantity above zero.');if(i.dueDate<i.issueDate)errors.push('Due date must not precede issue date.');const t=totals(i);if(new Decimal(i.discount).lt(0)||(i.discountType==='percent'&&new Decimal(i.discount).gt(100))||new Decimal(t.discount).gt(t.subtotal))errors.push('Discount exceeds the subtotal.');if(new Decimal(i.deposit).gt(t.total))errors.push('Requested deposit exceeds the total.');if(i.instalments.length&&i.instalments.reduce((a,x)=>a.add(x.amount),new Decimal(0)).gt(t.total))errors.push('Instalments exceed the total.');return errors}
 export const commandSchema=z.discriminatedUnion('type',[
   z.object({type:z.literal('business'),value:businessSchema}),z.object({type:z.literal('client'),value:clientSchema}),z.object({type:z.literal('project'),value:projectSchema}),z.object({type:z.literal('service'),value:serviceSchema}),z.object({type:z.literal('starter'),value:starterSchema}),z.object({type:z.literal('draft'),value:draftSchema}),
+  z.object({type:z.literal('deleteDraft'),id}),
   z.object({type:z.literal('deleteClient'),id}),z.object({type:z.literal('deleteProject'),id}),z.object({type:z.literal('deleteService'),id}),z.object({type:z.literal('deleteStarter'),id}),
   z.object({type:z.literal('dismissOnboarding'),dismissed:z.boolean()}),
   z.object({type:z.literal('issue'),id}),z.object({type:z.literal('duplicate'),id,newId:id}),z.object({type:z.literal('archive'),id,value:z.boolean()}),z.object({type:z.literal('void'),id,reason:z.string().min(1).max(1000)}),z.object({type:z.literal('payment'),id,value:paymentSchema}),z.object({type:z.literal('reverse'),id,paymentId:id}),
@@ -369,8 +414,43 @@ export function applyCommand(source:Workspace,raw:Command,now=new Date()):Worksp
   case 'project':if(!c.value.name.trim())throw new Error('Project name is required');if(c.value.clientId&&!w.clients.some(x=>x.id===c.value.clientId))throw new Error('Client not found');upsert(w.projects,c.value);break;
   case 'service':if(!c.value.name.trim())throw new Error('Service name is required');upsert(w.services,c.value);break;
   case 'starter':if(!c.value.name.trim())throw new Error('Starter name is required');upsert(w.starters,c.value);break;
-  case 'deleteClient':w.clients=w.clients.filter(x=>x.id!==c.id);w.projects=w.projects.map(p=>p.clientId===c.id?{...p,clientId:''}:p);break;
-  case 'deleteProject':w.projects=w.projects.filter(x=>x.id!==c.id);for(const e of (w.workEntries||[])){if(e.projectId===c.id){e.projectId=undefined;e.updated=stamp}}break;
+  case 'deleteDraft':{
+    const i=find(c.id);
+    if(i.lifecycle!=='draft')throw new Error('Only unissued draft invoices can be deleted. Use void for issued invoices.');
+    for(const e of (w.workEntries||[])){
+      if(e.reservedDraftId===c.id&&e.status==='reserved'){
+        e.status='unbilled';
+        e.reservedDraftId=undefined;
+        e.updated=stamp;
+      }
+    }
+    for(const p of w.projects){
+      for(const m of p.milestones||[]){
+        if(m.reservedDraftId===c.id&&m.status==='reserved'){
+          m.status='pending';
+          m.reservedDraftId=undefined;
+          m.updated=stamp;
+        }
+      }
+    }
+    w.messages=(w.messages||[]).filter(m=>m.invoiceId!==c.id);
+    w.schedules=(w.schedules||[]).filter(s=>s.invoiceId!==c.id);
+    w.invoices=w.invoices.filter(x=>x.id!==c.id);
+    break;
+  }
+  case 'deleteClient':{
+    w.clients=w.clients.filter(x=>x.id!==c.id);
+    w.projects=w.projects.map(p=>p.clientId===c.id?{...p,clientId:''}:p);
+    w.workEntries=(w.workEntries||[]).filter(e=>e.clientId!==c.id||e.status==='billed');
+    w.quotes=(w.quotes||[]).filter(q=>q.clientId!==c.id||q.status==='accepted');
+    break;
+  }
+  case 'deleteProject':{
+    w.projects=w.projects.filter(x=>x.id!==c.id);
+    for(const e of (w.workEntries||[])){if(e.projectId===c.id){e.projectId=undefined;e.updated=stamp}}
+    for(const q of (w.quotes||[])){if(q.projectId===c.id){q.projectId=undefined;q.updated=stamp}}
+    break;
+  }
   case 'deleteService':w.services=w.services.filter(x=>x.id!==c.id);break;
   case 'deleteStarter':w.starters=w.starters.filter(x=>x.id!==c.id);break;
   case 'dismissOnboarding':w.business.onboardingDismissed=c.dismissed;break;
