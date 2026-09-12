@@ -927,3 +927,40 @@ Update client directory records and invoice forms to support enriched billing fi
    - Typecheck: **0 errors (`npm run check`)**.
    - Agent sync check: **0 drift (`npm run sync:agents:check`)**.
    - Punctuation check: **0 em dashes, 0 en dashes**.
+
+## Animate UI Theme Toggler Button & Gradual View Transitions
+
+1. **Theme Management Context (`src/client/context/ThemeContext.tsx`)**:
+   - Implemented `ThemeProvider` and `useTheme()` providing `{ theme, resolvedTheme, setTheme, toggleTheme }`.
+   - Persists selection to `localStorage` under `invoiceui:theme` and automatically listens to `(prefers-color-scheme: dark)` system media query changes.
+   - Synchronizes both `document.documentElement.dataset.theme = resolvedTheme` and `document.documentElement.classList.toggle('dark', resolvedTheme === 'dark')` for seamless CSS token and Tailwind compatibility.
+   - Includes standalone fallback for use outside the provider.
+
+2. **Animate UI Theme Toggler Primitive (`src/client/components/ui/ThemeToggler.tsx`)**:
+   - Ported official Animate UI primitive (`@animate-ui/primitives-effects-theme-toggler`, `animate-ui.com/docs/primitives/effects/theme-toggler`).
+   - Supports directional clip-path wiping animations (`ltr`, `rtl`, `ttb`, `btt`) powered by `document.startViewTransition` with 700ms `cubic-bezier(0.16, 1, 0.3, 1)` easing.
+   - Strictly respects user reduced-motion preferences (`prefers-reduced-motion: reduce`), applying theme changes immediately without animation in compliance with Rule 13.
+   - Injects root view-transition pseudo-element animation overrides (`::view-transition-old(root)`, `::view-transition-new(root)`).
+
+3. **Animate UI Theme Toggler Button (`src/client/components/ui/ThemeTogglerButton.tsx`)**:
+   - Ported official Animate UI button (`@animate-ui/components-buttons-theme-toggler`, `animate-ui.com/docs/components/buttons/theme-toggler`, author: imskyleen).
+   - Full API compliance: `variant` (`default`, `accent`, `destructive`, `outline`, `secondary`, `ghost`, `link`), `size` (`default`, `xs`, `sm`, `lg`), `modes` (`('light' | 'dark' | 'system')[]`), `direction` (`ltr`, `rtl`, `ttb`, `btt`), and `onImmediateChange`.
+   - Incorporates tactile press depression (`active:scale-[0.98] active:translate-y-[1px]`) and fluid color transitions.
+   - Renders animated icons from `lucide-react` (`Sun`, `Moon`, `Monitor`) with Motion scale/rotate transitions.
+
+4. **App Header & Global Integration (`src/client/App.tsx`, `src/client/components/ui.tsx`, `src/client/styles.css`)**:
+   - Wrapped `App` in `<ThemeProvider>`.
+   - Replaced legacy `<select aria-label="Editor theme">` with `<ThemeTogglerButton variant="ghost" size="sm" modes={['light', 'dark', 'system']} title="Toggle light, dark, or system theme" aria-label="Toggle editor theme" />`.
+   - Re-exported `ThemeToggler`, `ThemeTogglerButton`, `ThemeProvider`, and `useTheme` from `src/client/components/ui.tsx`.
+   - Added root view-transition pseudo-element resets to `src/client/styles.css`.
+
+5. **Component Provenance Matrix (`docs/UI_COMPONENT_SOURCES.md`)**:
+   - Documented official Animate UI sources, MIT licence, local paths, and usage for both `ThemeToggler` and `ThemeTogglerButton` under Rule 02.
+
+6. **Verification & Test Coverage (`tests/theme-toggler.test.tsx`)**:
+   - Authored test suite covering clip-path keyframe calculation for all 4 directions, mode cycling (`['light', 'dark']` vs `['light', 'dark', 'system']`), variant/size class generation with tactile active scaling, server HTML rendering, and Rule 12 dash compliance.
+   - Full test suite: **23 test files, 196/196 tests passing (`npm test`)**.
+   - TypeScript static typecheck: **0 errors (`npm run check`)**.
+   - Production bundle build: **Successful (`npm run build`)**.
+   - Agent config sync check: **Clean (`npm run sync:agents:check`)**.
+   - Punctuation check: **0 em dashes, 0 en dashes**.
