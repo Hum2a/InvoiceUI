@@ -1,0 +1,13 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "invoice-ui", "main": "./src/worker/index.ts", "compatibility_date": "2026-09-12",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": { "directory": "./dist", "binding": "ASSETS", "not_found_handling": "single-page-application", "run_worker_first": ["/api/*"] },
+  "observability": { "enabled": true, "head_sampling_rate": 1 },
+  "account_id": "e6d408ebc85e159e6e22ee963641d342",
+  "r2_buckets": [{ "binding": "DOCUMENTS", "bucket_name": "invoice-ui-documents" }],
+  "routes": [{ "pattern": "invoiceui.humza.website", "custom_domain": true }],
+  "vars": { "APP_URL": "https://invoiceui.humza.website", "EMAIL_FROM": "Invoices <invoices@humza.website>", "OWNER_EMAIL": "humzab1711@hotmail.com" }
+
+}
+

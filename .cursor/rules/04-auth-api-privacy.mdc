@@ -1,0 +1,15 @@
+---
+description: "Authentication ownership and private data"
+alwaysApply: false
+globs: "src/worker/**,src/shared/**,migrations/**"
+---
+
+# Authentication ownership and private data
+
+- Verify server sessions and business ownership on every private query, mutation, upload and document retrieval. Do not trust client-supplied ownership IDs.
+- Preserve owner-only access and disabled public registration. Keep owner identity configurable; do not embed personal details in code or fixture data.
+- Validate inputs server-side, bound request sizes, protect cookie-authenticated changes against CSRF and return consistent actionable errors without leaking internals.
+- Store logos/documents privately with validated type/size and controlled access. Scope public tokens narrowly with expiry/revocation and prevent caching from bypassing revocation.
+- Keep secrets, bank information, customer records, magic links and public access tokens out of logs, fixtures and source control. Use synthetic test records.
+- Read environment templates for variable names; use provider secret storage for credentials. Never dump live environment files.
+

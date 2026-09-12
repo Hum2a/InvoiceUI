@@ -1,0 +1,106 @@
+# Dependencies
+node_modules/
+node_modules.recovery-*/
+.pnpm-store/
+.npm/
+.yarn/cache/
+.yarn/unplugged/
+.bun/
+
+# Secrets and local environment
+# Keep *.example / *.sample / *.template so the repo documents required keys.
+.env
+.env.*
+!.env.example
+!.env.*.example
+!.env.sample
+!.env.template
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+!.dev.vars.*.example
+.neon
+.neon/
+.secrets/
+secrets/
+credentials/
+.npmrc
+.netrc
+.htpasswd
+*.pem
+*.key
+*.p12
+*.pfx
+*.keystore
+*.jks
+
+# Cloudflare / Wrangler / Vite local runtime
+.wrangler/
+.mf/
+.vite/
+.cache/
+.parcel-cache/
+.turbo/
+.vercel/
+.netlify/
+
+# Build, typecheck and test output
+/dist/
+/build/
+/out/
+/coverage/
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+*.tsbuildinfo
+*.map
+
+# Private or generated business data
+/artifacts/
+/exports/
+/backups/
+/private/
+/uploads/
+/storage/
+/tmp/
+/temp/
+/logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.dump
+*.sql.gz
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.har
+*.trace
+*.bak
+*.tmp
+
+# Editor, OS and agent local state
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.history/
+*.swp
+*~
+.vscode/*.log
+.claude/settings.local.json
+.claude/projects/
+.codex/sessions/
+.codex/log/
+.gemini/tmp/
+.aider.chat.history.md
+.aider.input.history
+.aider.tags.cache*/
+
+# Keep source, SQL migrations, lockfiles, Worker type bindings,
+# public assets, example env files and all instruction files.

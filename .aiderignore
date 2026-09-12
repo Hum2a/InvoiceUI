@@ -1,0 +1,116 @@
+# Generated from .cursorignore; edit that file and run npm run sync:agents.
+# Portable AI context exclusions. Source for generated native ignore files.
+# These patterns reduce context and protect routine tool reads, not OS access.
+# Secrets and provider-local state
+.env
+.env.*
+!.env.example
+!.env.*.example
+!.env.sample
+!.env.template
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+!.dev.vars.*.example
+.neon/
+.neon
+.wrangler/
+.vercel/
+.netlify/
+.secrets/
+secrets/
+credentials/
+*.pem
+*.key
+*.p12
+*.pfx
+*.keystore
+*.jks
+.npmrc
+.pypirc
+.netrc
+.htpasswd
+# Dependencies and caches
+node_modules/
+node_modules.recovery-*/
+.pnpm-store/
+.npm/
+.yarn/cache/
+.yarn/unplugged/
+.bun/
+.cache/
+.parcel-cache/
+.turbo/
+.vite/
+.eslintcache
+.stylelintcache
+__pycache__/
+*.pyc
+.venv/
+venv/
+# Build and tooling output
+/dist/
+/build/
+/out/
+/coverage/
+/test-results/
+/playwright-report/
+/blob-report/
+*.tsbuildinfo
+*.map
+*.min.js
+*.min.css
+# Runtime and potentially private generated data
+/artifacts/
+/exports/
+/backups/
+/private/
+/uploads/
+/storage/
+/tmp/
+/temp/
+/logs/
+*.log
+*.dump
+*.sql.gz
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.har
+*.trace
+*.bak
+*.tmp
+# Archives and executables
+*.zip
+*.7z
+*.rar
+*.tar
+*.tgz
+*.exe
+*.dll
+*.dmg
+*.iso
+# VCS/editor local history and agent transcripts
+.git/
+.svn/
+.hg/
+.history/
+.idea/
+.vscode/*.log
+.aider.chat.history.md
+.aider.input.history
+.aider.tags.cache*/
+.claude/settings.local.json
+.claude/projects/
+.codex/sessions/
+.codex/log/
+.gemini/tmp/
+desktop.ini
+Thumbs.db
+.DS_Store
+# Deliberately keep source, SQL migrations, lockfiles, generated Worker bindings,
+# public images/fonts, synthetic fixtures, templates and all instruction files.
+

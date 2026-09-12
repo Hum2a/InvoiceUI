@@ -1,0 +1,49 @@
+name: Feature request
+description: Propose a change that fits the product plan
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        InvoiceUI is a private owner-only workspace. Check IMPLEMENTATION_PLAN.md in the repository before proposing work that is already specified or explicitly out of scope (card collection, automatic FX, historical invoice import).
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What is painful or missing today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: What should change in the UI, API or data model?
+    validations:
+      required: true
+  - type: dropdown
+    id: plan
+    attributes:
+      label: Implementation plan section
+      options:
+        - Already covered (cite the section in the proposal)
+        - Phase 6 - email, sharing, reminders
+        - Phase 7 - backup, polish, release
+        - New, in-scope
+        - Future / out of current plan
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance
+      description: How we will know it works (UI behaviour, tests, documents). A passing build alone is not enough.
+    validations:
+      required: true
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: Confirmation
+      options:
+        - label: This request does not require committing secrets or live customer data.
+          required: true

@@ -1,0 +1,6 @@
+# Copy to .dev.vars. Do not commit the filled file.
+DATABASE_URL="postgresql://..."
+RESEND_API_KEY="re_..."
+BETTER_AUTH_SECRET="generate-a-random-secret-at-least-32-characters-long"
+RESEND_WEBHOOK_SECRET="whsec_..."
+# For local authenticated development, also override APP_URL to http://localhost:5173.

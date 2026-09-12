@@ -1,0 +1,73 @@
+name: Bug report
+description: Unexpected behaviour in InvoiceUI
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use **synthetic** invoice and client data only. Do not paste secrets, `.dev.vars`, magic-link URLs, session cookies or real customer records.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What went wrong, in one or two sentences.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Sign in as the owner
+        2. Open a draft invoice
+        3. …
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Surface
+      options:
+        - Editor / composer
+        - Preview / PDF
+        - Dashboard / payments
+        - Auth / API
+        - Email / sharing
+        - Deploy / Worker
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: e.g. local Vite 5173, wrangler dev, or production Worker. Browser and OS if UI-related.
+    validations:
+      required: true
+  - type: textarea
+    id: checks
+    attributes:
+      label: Checks already run
+      description: Output of `npm test`, `npm run check`, or `npm run build` if relevant. Redact secrets.
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: Confirmation
+      options:
+        - label: This report does not contain live customer data or secrets.
+          required: true
+        - label: I searched existing issues for a duplicate.
+          required: true
